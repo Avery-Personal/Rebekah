@@ -8,6 +8,9 @@ typedef enum {
     TOKEN_NUMBER,
     TOKEN_ARRAY,
 
+    TOKEN_CHAR_LITERAL,
+    TOKEN_STRING_LITERAL,
+
     TOKEN_TYPE,
     TOKEN_AS,
 

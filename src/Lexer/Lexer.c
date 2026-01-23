@@ -168,15 +168,13 @@ Token LexerNextToken(Lexer *_Lexer) {
         _Token.Type = TOKEN_NUMBER;
 
         _Token.Literal.Number = strtod(_Token.Start, NULL);
-    } else if (Character == '"' || Character == '\'') {
-        char Quote = Character;
-
+    } else if (Character == '"') {
         size_t Start = _Lexer -> Cursor;
 
         while (!LexerIsAtEnd(_Lexer)) {
             char NextCharacter = LexerNext(_Lexer);
 
-            if (NextCharacter == Quote)
+            if (NextCharacter == '"')
                 break;
 
             if (NextCharacter == '\n') {
@@ -185,28 +183,26 @@ Token LexerNextToken(Lexer *_Lexer) {
                 break;
             }
 
-            if (NextCharacter == '\\') {
-                if (LexerIsAtEnd(_Lexer)) {
-                    LexerErrorAt(_Lexer, "unfinished escape sequence");
-
-                    break;
-                }
-
+            if (NextCharacter == '\\')
                 LexerNext(_Lexer);
-            }
         }
 
-        if (LexerPeek(_Lexer) == Quote)
-            LexerNext(_Lexer);
-
-        if (LexerIsAtEnd(_Lexer)) {
+        if (LexerIsAtEnd(_Lexer))
             LexerErrorAt(_Lexer, "unterminated string literal");
-        }
 
         _Token.Start = _Lexer -> Source + Start;
         _Token.Length = _Lexer -> Cursor - Start - 1;
 
-        _Token.Type = TOKEN_STRING;
+        _Token.Type = TOKEN_STRING_LITERAL;
+    } else if (Character == '\'') {
+        char Value = LexerNext(_Lexer);
+
+        if (LexerNext(_Lexer) != '\'') {
+            LexerErrorAt(_Lexer, "invalid character literal");
+        }
+
+        _Token.Type = TOKEN_CHAR_LITERAL;
+        _Token.Literal.Int = (uint64_t) Value;
     } else {
         switch (Character) {
             case '+': _Token.Type = TOKEN_PLUS; break;
@@ -266,17 +262,7 @@ Token LexerNextToken(Lexer *_Lexer) {
 
                 break;
 
-            case '~':
-                if (LexerPeek(_Lexer) == '=') {
-                    LexerNext(_Lexer);
-                    
-                    _Token.Type = TOKEN_BIT_NOT;
-                } else {
-                    _Token.Type = TOKEN_ERROR;
-                }
-
-                break;
-
+            case '~': _Token.Type = TOKEN_BIT_NOT; break;
             case '<':
                 if (LexerPeek(_Lexer) == '<') {
                     LexerNext(_Lexer);
