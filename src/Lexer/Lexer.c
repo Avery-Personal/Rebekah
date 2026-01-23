@@ -65,6 +65,7 @@ TokenType ResolveIdentifier(const char* Start, size_t Len) {
     if (Len == 8 && memcmp(Start, "function", 8) == 0) return TOKEN_FUNCTION;
     if (Len == 5 && memcmp(Start, "begin", 5) == 0) return TOKEN_BEGIN;
     if (Len == 3 && memcmp(Start, "end", 3) == 0) return TOKEN_END;
+    if (Len == 2 && memcmp(Start, "is", 2) == 0) return TOKEN_IS;
     if (Len == 7 && memcmp(Start, "return", 7) == 0) return TOKEN_RETURN;
     if (Len == 5 && memcmp(Start, "while", 5) == 0) return TOKEN_WHILE;
     if (Len == 6 && memcmp(Start, "repeat", 6) == 0) return TOKEN_REPEAT;

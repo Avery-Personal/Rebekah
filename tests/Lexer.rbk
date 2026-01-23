@@ -1,0 +1,24 @@
+procedure Log(Str : String) is
+begin
+    output(Str)
+end Log
+
+function Sum(A : Integer, B : Integer) -> Integer is
+begin
+    return A + B
+end Sum
+
+method Main is
+begin
+    MUTABLE Counter : Integer = 1
+
+    method NextCount is
+    begin
+        Counter = Counter + 1
+    end
+
+    NextCount()
+    NextCount()
+
+    output("Counter:", Counter)
+end Main
