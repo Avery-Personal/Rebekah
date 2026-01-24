@@ -92,7 +92,12 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
         Function -> ReturnType = ParseType(_Parser);
     }
 
-    Function -> Body = ParseBlock(_Parser);
+    ASTStatement *Block = ParseBlock(_Parser);
+
+    Function -> Body = Block -> Block.Statements;
+    Function -> BodyCount = Block -> Block.Count;
+
+    free(Block);
 
     return Function;
 }
@@ -149,7 +154,12 @@ ASTStatement *ParseIfStatement(Parser *_Parser) {
 
     ParserMatch(_Parser, TOKEN_THEN);
 
-    If -> If.ThenBlock = ParseBlock(_Parser);
+    ASTStatement *ThenBlock = ParseBlock(_Parser);
+
+    If -> If.ThenBlock = ThenBlock -> Block.Statements;
+    If -> If.ThenCount = ThenBlock -> Block.Count;
+
+    free(ThenBlock);
 
     return If;
 }
@@ -161,7 +171,12 @@ ASTStatement *ParseWhileStatement(Parser *_Parser) {
 
     ParserMatch(_Parser, TOKEN_DO);
 
-    While -> While.Body = ParseBlock(_Parser);
+    ASTStatement *Body = ParseBlock(_Parser);
+
+    While -> While.Body = Body -> Block.Statements;
+    While -> While.Count = Body -> Block.Count;
+
+    free(Body);
 
     return While;
 }
@@ -169,7 +184,12 @@ ASTStatement *ParseWhileStatement(Parser *_Parser) {
 ASTStatement *ParseRepeatStatement(Parser *_Parser) {
     ASTStatement *Repeat = calloc(1, sizeof(ASTStatement));
 
-    Repeat -> Repeat.Body = ParseBlock(_Parser);
+    ASTStatement *Body = ParseBlock(_Parser);
+
+    Repeat -> Repeat.Body = Body -> Block.Statements;
+    Repeat -> Repeat.Count = Body -> Block.Count;
+
+    free(Body);
 
     ParserMatch(_Parser, TOKEN_UNTIL);
 
@@ -188,18 +208,20 @@ ASTStatement *ParseForStatement(Parser *_Parser) {
     }
 
     For -> For.Iterator = ParserPrevious(_Parser) -> Start;
-
     ParserMatch(_Parser, TOKEN_ASSIGN);
 
     For -> For.Start = ParseExpression(_Parser);
-
     ParserMatch(_Parser, TOKEN_DOT_DOT);
 
     For -> For.End = ParseExpression(_Parser);
-
     ParserMatch(_Parser, TOKEN_DO);
 
-    For -> For.Body = ParseBlock(_Parser);
+    ASTStatement *Body = ParseBlock(_Parser);
+
+    For -> For.Body = Body -> Block.Statements;
+    For -> For.Count = Body -> Block.Count;
+
+    free(Body);
 
     return For;
 }

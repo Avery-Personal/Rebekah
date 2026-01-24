@@ -1,0 +1,45 @@
+function CreateInteger(Value : Integer) -> Integer is
+begin
+   return Value
+end CreateInteger
+
+method Main is
+begin
+   Numbers : Array<Array<Integer>> = [
+        [1, 2, 3],
+        [4, 5, 6],
+        [7, 8, 9]
+   ]
+
+   Numbers2 : Array<Array<Array<Integer>>> = [
+        [
+            [1, 2],
+            [3, 4]
+        ],
+        [
+            [5, 6],
+            [7, 8]
+        ]
+    ]
+
+    MUTABLE Counter : Integer = CreateInteger(0)
+
+    method NextCounter is
+    begin
+        Counter := Counter + 1
+    end NextCounter
+
+    procedure IncrementCounter(Value : Integer) is
+    begin
+        Counter := Counter + Value
+    end IncrementCounter
+
+    NextCounter()
+    NextCounter()
+
+    output("Counter:", Counter)
+
+    IncrementCounter(5)
+
+    output("Counter:", Counter)
+end Main

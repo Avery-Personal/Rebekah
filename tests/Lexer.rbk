@@ -15,7 +15,7 @@ begin
     method NextCount is
     begin
         Counter = Counter + 1
-    end
+    end NextCount
 
     NextCount()
     NextCount()
