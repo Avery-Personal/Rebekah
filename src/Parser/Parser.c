@@ -101,7 +101,7 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     return Statement;
 }
 
-ASTStatement* ParseBlock(Parser *_Parser) {
+ASTStatement *ParseBlock(Parser *_Parser) {
     ASTStatement *Block = calloc(1, sizeof(ASTStatement));
 
     Block -> Kind = STMT_BLOCK;
@@ -131,7 +131,7 @@ ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
     return Variable;
 }
 
-ASTStatement* ParseIfStatement(Parser *_Parser) {
+ASTStatement *ParseIfStatement(Parser *_Parser) {
     ASTStatement *If = calloc(1, sizeof(ASTStatement));
 
     If -> If.Condition = ParseExpression(_Parser);
@@ -143,7 +143,7 @@ ASTStatement* ParseIfStatement(Parser *_Parser) {
     return If;
 }
 
-ASTStatement* ParseWhileStatement(Parser *_Parser) {
+ASTStatement *ParseWhileStatement(Parser *_Parser) {
     ASTStatement *While = calloc(1, sizeof(ASTStatement));
 
     While -> While.Condition = ParseExpression(_Parser);
@@ -155,7 +155,7 @@ ASTStatement* ParseWhileStatement(Parser *_Parser) {
     return While;
 }
 
-ASTStatement* ParseRepeatStatement(Parser *_Parser) {
+ASTStatement *ParseRepeatStatement(Parser *_Parser) {
     ASTStatement *Repeat = calloc(1, sizeof(ASTStatement));
 
     Repeat -> Repeat.Body = ParseBlock(_Parser);
@@ -231,7 +231,7 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
     return Left;
 }
 
-ASTExpression* ParseUnary(Parser *_Parser) {
+ASTExpression *ParseUnary(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_MINUS) ||
         ParserMatch(_Parser, TOKEN_NOT)) {
         ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
@@ -245,7 +245,7 @@ ASTExpression* ParseUnary(Parser *_Parser) {
     return ParsePrimary(_Parser);
 }
 
-ASTExpression* ParsePrimary(Parser *_Parser) {
+ASTExpression *ParsePrimary(Parser *_Parser) {
     ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
 
     if (ParserMatch(_Parser, TOKEN_NUMBER)) {
@@ -295,9 +295,44 @@ ASTExpression* ParsePrimary(Parser *_Parser) {
         return Expression;
     }
 
+    if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
+        return ParseArrayLiteral(_Parser);
+    }
+
     ParserError(_Parser, "invalid expression");
 
     return Expression;
+}
+
+ASTExpression *ParseArrayLiteral(Parser *_Parser) {
+    ASTExpression *ArrayLiteral = calloc(1, sizeof(ASTExpression));
+
+    ArrayLiteral -> Kind = EXPR_ARRAY_LITERAL;
+    ArrayLiteral -> Array.Elements = NULL;
+    ArrayLiteral -> Array.Count = 0;
+
+    if (ParserMatch(_Parser, TOKEN_RBRACKET)) {
+        return ArrayLiteral;
+    }
+
+    while (1) {
+        ASTExpression *Element = ParseExpression(_Parser);
+
+        ArrayLiteral -> Array.Elements = realloc(ArrayLiteral -> Array.Elements, sizeof(ASTExpression *) * (ArrayLiteral -> Array.Count + 1));
+        ArrayLiteral -> Array.Elements[ArrayLiteral -> Array.Count++] = Element;
+
+        if (ParserMatch(_Parser, TOKEN_COMMA))
+            continue;
+
+        if (ParserCheck(_Parser, TOKEN_RBRACKET))
+            break;
+
+        ParserError(_Parser, "expected ',' or ']' in array literal");
+
+        break;
+    }
+
+    return ArrayLiteral;
 }
 
 ASTType* ParseType(Parser *_Parser) {

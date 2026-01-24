@@ -14,28 +14,29 @@ typedef struct {
 int GetOperatorPrecedence(TokenType Type);
 
 ASTProgram *ParseProgram(Parser *_Parser);
-ASTSubprogram* ParseSubprogram(Parser *_Parser);
+ASTSubprogram *ParseSubprogram(Parser *_Parser);
 
-ASTStatement* ParseStatement(Parser *_Parser);
-ASTStatement* ParseBlock(Parser *_Parser);
-ASTStatement* ParseVariableDeclaration(Parser *_Parser);
+ASTStatement *ParseStatement(Parser *_Parser);
+ASTStatement *ParseBlock(Parser *_Parser);
+ASTStatement *ParseVariableDeclaration(Parser *_Parser);
 
-ASTStatement* ParseIfStatement(Parser *_Parser);
-ASTStatement* ParseWhileStatement(Parser *_Parser);
-ASTStatement* ParseRepeatStatement(Parser *_Parser);
-ASTStatement* ParseForStatement(Parser *_Parser);
-ASTStatement* ParseReturnStatement(Parser *_Parser);
+ASTStatement *ParseIfStatement(Parser *_Parser);
+ASTStatement *ParseWhileStatement(Parser *_Parser);
+ASTStatement *ParseRepeatStatement(Parser *_Parser);
+ASTStatement *ParseForStatement(Parser *_Parser);
+ASTStatement *ParseReturnStatement(Parser *_Parser);
 
-ASTExpression* ParseExpression(Parser *_Parser);
-ASTExpression* ParseBinary(Parser *_Parser, int Precedence);
-ASTExpression* ParseUnary(Parser *_Parser);
-ASTExpression* ParsePrimary(Parser *_Parser);
+ASTExpression *ParseExpression(Parser *_Parser);
+ASTExpression *ParseBinary(Parser *_Parser, int Precedence);
+ASTExpression *ParseUnary(Parser *_Parser);
+ASTExpression *ParsePrimary(Parser *_Parser);
+ASTExpression *ParseArrayLiteral(Parser *_Parser);
 
-ASTType* ParseType(Parser *_Parser);
+ASTType *ParseType(Parser *_Parser);
 
-Token* ParserPeek(Parser *_Parser);
-Token* ParserPrevious(Parser *_Parser);
-Token* ParserAdvance(Parser *_Parser);
+Token *ParserPeek(Parser *_Parser);
+Token *ParserPrevious(Parser *_Parser);
+Token *ParserAdvance(Parser *_Parser);
 
 int ParserMatch(Parser *_Parser, TokenType Type);
 int ParserCheck(Parser *_Parser, TokenType Type);
