@@ -20,6 +20,65 @@ ASTProgram *ParseProgram(Parser *_Parser) {
     }
 }
 
+ASTSubprogram *ParseSubprogram(Parser *_Parser) {
+    ASTSubprogram *Function = calloc(1, sizeof(ASTSubprogram));
+
+    Function -> Kind = ParserAdvance(_Parser) -> Type;
+
+    if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+        ParserError(_Parser, "expected subprogram name");
+
+        return Function;
+    }
+
+    Function -> Name = ParserPrevious(_Parser) -> Start;
+
+    ParserMatch(_Parser, TOKEN_LPAREN);
+
+    while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
+        ASTType *ParamType = ParseType(_Parser);
+
+        if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+            ParserError(_Parser, "expected parameter name");
+
+            break;
+        }
+
+        const char *ParamName = ParserPrevious(_Parser) -> Start;
+
+        Function -> Params[Function -> ParamCount].Name = ParamName;
+        Function -> Params[Function -> ParamCount].Type = ParamType;
+        Function -> ParamCount++;
+
+        ParserMatch(_Parser, TOKEN_COMMA);
+    }
+
+    ParserMatch(_Parser, TOKEN_RPAREN);
+
+    if (ParserMatch(_Parser, TOKEN_COLON)) {
+        Function -> ReturnType = ParseType(_Parser);
+    }
+
+    Function -> Body = ParseBlock(_Parser);
+
+    return Function;
+}
+
+ASTStatement *ParseStatement(Parser *_Parser) {
+    if (ParserMatch(_Parser, TOKEN_BEGIN)) return ParseBlock(_Parser);
+    if (ParserMatch(_Parser, TOKEN_IF)) return ParseIfStatement(_Parser);
+    if (ParserMatch(_Parser, TOKEN_WHILE)) return ParseWhileStatement(_Parser);
+    if (ParserMatch(_Parser, TOKEN_REPEAT)) return ParseRepeatStatement(_Parser);
+    if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
+    if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturn(_Parser);
+    if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) return ParseVariableDeclaration(_Parser);
+
+    ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
+    Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
+
+    return Statement;
+}
+
 Token *ParserPeek(Parser *_Parser) {
     return _Parser -> Current;
 }

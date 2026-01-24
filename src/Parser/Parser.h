@@ -22,10 +22,12 @@ ASTStatement* ParseIfStatement(Parser *_Parser);
 ASTStatement* ParseWhileStatement(Parser *_Parser);
 ASTStatement* ParseRepeatStatement(Parser *_Parser);
 ASTStatement* ParseForStatement(Parser *_Parser);
+ASTStatement* ParseReturn(Parser *_Parser);
 
 ASTExpression* ParseExpression(Parser *_Parser);
-ASTExpression* ParseLiteral(Parser *_Parser);
-ASTExpression* ParseIdentifierOrCall(Parser *_Parser);
+ASTExpression* ParseBinary(Parser *_Parser, int Precedence);
+ASTExpression* ParseUnary(Parser *_Parser);
+ASTExpression* ParsePrimary(Parser *_Parser);
 
 ASTType* ParseType(Parser *_Parser);
 

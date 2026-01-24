@@ -202,6 +202,11 @@ struct ASTStatement {
         } Call;
 
         struct {
+            ASTExpression *Expression
+        } ExpressionStmt;
+        
+
+        struct {
             ASTStatement **Statements;
             size_t Count;
         } Block;

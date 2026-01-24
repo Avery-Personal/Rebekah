@@ -122,7 +122,7 @@ static void LexerErrorAt(Lexer *_Lexer, const char *Message) {
     _Lexer -> HasError = 1;
 }
 
-static void LexerError(Lexer *_Lexer) {
+static void LexingError(Lexer *_Lexer) {
     fprintf(stderr, "[Lexer Error] Line %u:%u >> %s\n", _Lexer -> Error.Line, _Lexer -> Error.Column, _Lexer -> Error.Message);
 
     exit(EXIT_FAILURE);
