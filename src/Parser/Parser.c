@@ -69,16 +69,23 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
     ParserMatch(_Parser, TOKEN_LPAREN);
 
     while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
-        ASTType *ParamType = ParseType(_Parser);
-
         if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
             ParserError(_Parser, "expected parameter name");
 
             break;
         }
 
-        const char *ParamName = ParserPrevious(_Parser) -> Start;
+        if (!ParserMatch(_Parser, TOKEN_COLON)) {
+            ParserError(_Parser, "expected ':' after parameter name");
 
+            break;
+        }
+
+        const char *ParamName = ParserPrevious(_Parser) -> Start;
+        ASTType *ParamType = ParseType(_Parser);
+
+        Function -> Params = realloc(Function -> Params, sizeof(*Function -> Params) * (Function -> ParamCount + 1));
+        
         Function -> Params[Function -> ParamCount].Name = ParamName;
         Function -> Params[Function -> ParamCount].Type = ParamType;
         Function -> ParamCount++;
@@ -88,8 +95,12 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 
     ParserMatch(_Parser, TOKEN_RPAREN);
 
-    if (ParserMatch(_Parser, TOKEN_COLON)) {
-        Function -> ReturnType = ParseType(_Parser);
+    if (ParserMatch(_Parser, TOKEN_ARROW)) {
+        Function->ReturnType = ParseType(_Parser);
+    }
+
+    if (!ParserMatch(_Parser, TOKEN_IS)) {
+        ParserError(_Parser, "expected 'is' before subprogram body");
     }
 
     ASTStatement *Block = ParseBlock(_Parser);
@@ -133,16 +144,28 @@ ASTStatement *ParseBlock(Parser *_Parser) {
 
 ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
+
+    Variable -> Kind = STMT_VAR_DECL;
     Variable -> VarDecl.Mutable = ParserMatch(_Parser, TOKEN_MUTABLE);
 
-    ParserMatch(_Parser, TOKEN_IDENTIFIER);
+    if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+        ParserError(_Parser, "expected variable name");
+
+        return Variable;
+    }
+
     Variable -> VarDecl.Name = ParserPrevious(_Parser)->Start;
 
     if (ParserMatch(_Parser, TOKEN_COLON))
         Variable -> VarDecl.Type = ParseType(_Parser);
 
-    if (ParserMatch(_Parser, TOKEN_ASSIGN))
-        Variable -> VarDecl.Initializer = ParseExpression(_Parser);
+    if (ParserMatch(_Parser, TOKEN_ASSIGN)) {
+        if (ParserCheck(_Parser, TOKEN_LBRACKET)) { 
+            Variable -> VarDecl.Initializer = ParseArrayLiteral(_Parser);
+        } else {
+            Variable -> VarDecl.Initializer = ParseExpression(_Parser);
+        }
+    }
 
     return Variable;
 }
@@ -344,11 +367,7 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
     ArrayLiteral -> Array.Elements = NULL;
     ArrayLiteral -> Array.Count = 0;
 
-    if (ParserMatch(_Parser, TOKEN_RBRACKET)) {
-        return ArrayLiteral;
-    }
-
-    while (!ParserCheck(_Parser, TOKEN_EOF)) {
+    while (!ParserCheck(_Parser, TOKEN_RBRACKET) && !ParserCheck(_Parser, TOKEN_EOF)) {
         ASTExpression *Element = NULL;
 
         if (ParserCheck(_Parser, TOKEN_LBRACKET)) {
@@ -361,14 +380,15 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
         ArrayLiteral -> Array.Elements = realloc(ArrayLiteral -> Array.Elements, sizeof(ASTExpression *) * (ArrayLiteral -> Array.Count + 1));
         ArrayLiteral -> Array.Elements[ArrayLiteral -> Array.Count++] = Element;
 
-        if (ParserMatch(_Parser, TOKEN_COMMA))
-            continue;
-
-        if (ParserCheck(_Parser, TOKEN_RBRACKET))
-            break;
+        if (!ParserMatch(_Parser, TOKEN_COMMA))
+            break;;
 
         ParserError(_Parser, "expected ',' or ']' in array literal");
         ParserAdvance(_Parser);
+    }
+
+    if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
+        ParserError(_Parser, "expected ']'");
     }
 
     return ArrayLiteral;
@@ -462,4 +482,7 @@ void ParserError(Parser *_Parser, const char *Message) {
     fprintf(stderr, "[Parse Error] Line %u:%u >> %s\n", _Parser -> Current -> Line, _Parser -> Current -> Column, Message);
 
     _Parser -> HasError = 1;
+
+    if (_Parser -> Current -> Type != TOKEN_EOF)
+        ParserAdvance(_Parser);
 }
