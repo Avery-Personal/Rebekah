@@ -300,6 +300,32 @@ ASTExpression* ParsePrimary(Parser *_Parser) {
     return Expression;
 }
 
+ASTType* ParseType(Parser *_Parser) {
+    ASTType *Type = calloc(1, sizeof(ASTType));
+
+    if (ParserMatch(_Parser, TOKEN_ARRAY)) {
+        ParserMatch(_Parser, TOKEN_LT);
+
+        Type -> ElementType = ParseType(_Parser);
+
+        ParserMatch(_Parser, TOKEN_GT);
+
+        Type -> Kind = TYPE_ARRAY;
+
+        return Type;
+    }
+
+    if (ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+        Type -> Name = ParserPrevious(_Parser) -> Start;
+
+        return Type;
+    }
+
+    ParserError(_Parser, "invalid type");
+
+    return Type;
+}
+
 Token *ParserPeek(Parser *_Parser) {
     return _Parser -> Current;
 }
