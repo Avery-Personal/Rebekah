@@ -134,6 +134,15 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 }
 
 ASTStatement *ParseStatement(Parser *_Parser) {
+    if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+        ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
+
+        Statement -> Kind = STMT_SUBPROGRAM;
+        Statement -> Block.Subprograms = ParseSubprogram(_Parser);
+
+        return Statement;
+    }
+
     if (ParserMatch(_Parser, TOKEN_BEGIN)) return ParseBlock(_Parser);
     if (ParserMatch(_Parser, TOKEN_IF)) return ParseIfStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_WHILE)) return ParseWhileStatement(_Parser);
@@ -141,13 +150,14 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturnStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) return ParseVariableDeclaration(_Parser);
+    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheck(_Parser, TOKEN_COLON)) return ParseVariableDeclaration(_Parser);
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
     Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
 
     if (_Parser -> HasError) {
         free(Statement);
-        
+
         return NULL;
     }
 
@@ -175,6 +185,7 @@ ASTStatement *ParseBlock(Parser *_Parser) {
     }
 
     ParserMatch(_Parser, TOKEN_END);
+    ParserMatch(_Parser, TOKEN_IDENTIFIER);
 
     return Block;
 }
@@ -444,16 +455,13 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
                 ASTExpression *Call = calloc(1, sizeof(ASTExpression));
 
                 Call -> Kind = EXPR_CALL;
-
                 Call -> Call.Callee = Expression;
-                Call -> Call.Args = NULL;
-                Call -> Call.ArgCount = 0;
 
                 while (!ParserCheck(_Parser, TOKEN_RPAREN)) {
-                    ASTExpression *Argrguments = ParseExpression(_Parser);
+                    ASTExpression *Arguments = ParseExpression(_Parser);
 
                     Call -> Call.Args = realloc(Call -> Call.Args, sizeof(ASTExpression*) * (Call -> Call.ArgCount + 1));
-                    Call -> Call.Args[Call -> Call.ArgCount++] = Argrguments;
+                    Call -> Call.Args[Call -> Call.ArgCount++] = Arguments;
 
                     if (!ParserMatch(_Parser, TOKEN_COMMA))
                         break;
