@@ -11,6 +11,7 @@ typedef struct {
     int HasError;
 } Parser;
 
+int IsSyncToken(TokenType Type);
 int GetOperatorPrecedence(TokenType Type);
 
 Parser CreateParser(TokenStream *Tokens);

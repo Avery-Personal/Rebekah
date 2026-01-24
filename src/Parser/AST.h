@@ -94,6 +94,7 @@ typedef enum {
 } ASTSubprogramKind;
 
 typedef struct ASTStatement ASTStatement;
+typedef struct ASTSubprogram ASTSubprogram;
 
 typedef struct ASTType {
     ASTTypeKind Kind;
@@ -220,11 +221,14 @@ struct ASTStatement {
         struct {
             ASTStatement **Statements;
             size_t Count;
+
+            ASTSubprogram **Subprograms;
+            int SubprogramCount;
         } Block;
     };
 };
 
-typedef struct ASTSubprogram {
+struct ASTSubprogram {
     ASTSubprogramKind Kind;
 
     const char *Name;
@@ -239,7 +243,7 @@ typedef struct ASTSubprogram {
 
     ASTStatement **Body;
     size_t BodyCount;
-} ASTSubprogram;
+};
 
 typedef struct ASTProgram {
     ASTSubprogram **Subprograms;

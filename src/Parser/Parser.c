@@ -4,6 +4,26 @@
 
 #include "Parser.h"
 
+int IsSyncToken(TokenType Type) {
+    switch (Type) {
+        case TOKEN_END:
+        case TOKEN_BEGIN:
+        case TOKEN_IF:
+        case TOKEN_WHILE:
+        case TOKEN_FOR:
+        case TOKEN_REPEAT:
+        case TOKEN_RETURN:
+        case TOKEN_MUTABLE:
+        case TOKEN_CONSTANT:
+        case TOKEN_METHOD:
+        case TOKEN_PROCEDURE:
+        case TOKEN_FUNCTION:
+        case TOKEN_EOF: return 1;
+
+        default: return 0;
+    }
+}
+
 int GetOperatorPrecedence(TokenType Type) {
     switch (Type) {
         case TOKEN_OR: return 1;
@@ -125,6 +145,12 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
     Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
 
+    if (_Parser -> HasError) {
+        free(Statement);
+        
+        return NULL;
+    }
+
     return Statement;
 }
 
@@ -133,9 +159,20 @@ ASTStatement *ParseBlock(Parser *_Parser) {
 
     Block -> Kind = STMT_BLOCK;
     
+    while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_EOF)) {
+        if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+            ASTSubprogram *Subprogram = ParseSubprogram(_Parser);
 
-    while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_EOF))
-        Block -> Block.Statements[Block -> Block.Count++] = ParseStatement(_Parser);
+            Block -> Block.Subprograms = realloc(Block -> Block.Subprograms, sizeof(ASTSubprogram*) * (Block -> Block.SubprogramCount + 1));
+            Block -> Block.Subprograms[Block -> Block.SubprogramCount++] = Subprogram;
+
+            continue;
+        }
+
+        ASTStatement *Statement = ParseStatement(_Parser);
+        if (Statement)
+            Block -> Block.Statements[Block -> Block.Count++] = Statement;
+    }
 
     ParserMatch(_Parser, TOKEN_END);
 
@@ -380,11 +417,12 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
         ArrayLiteral -> Array.Elements = realloc(ArrayLiteral -> Array.Elements, sizeof(ASTExpression *) * (ArrayLiteral -> Array.Count + 1));
         ArrayLiteral -> Array.Elements[ArrayLiteral -> Array.Count++] = Element;
 
-        if (!ParserMatch(_Parser, TOKEN_COMMA))
-            break;;
+        if (ParserMatch(_Parser, TOKEN_COMMA))
+            continue;
 
-        ParserError(_Parser, "expected ',' or ']' in array literal");
-        ParserAdvance(_Parser);
+        if (!ParserCheck(_Parser, TOKEN_RBRACKET)) {
+            ParserError(_Parser, "expected ',' or ']' in array literal");
+        }
     }
 
     if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
@@ -401,6 +439,32 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
         if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
             ASTExpression *IndexExpr = ParseExpression(_Parser);
             ASTExpression *Index = calloc(1, sizeof(ASTExpression));
+
+            if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+                ASTExpression *Call = calloc(1, sizeof(ASTExpression));
+
+                Call -> Kind = EXPR_CALL;
+
+                Call -> Call.Callee = Expression;
+                Call -> Call.Args = NULL;
+                Call -> Call.ArgCount = 0;
+
+                while (!ParserCheck(_Parser, TOKEN_RPAREN)) {
+                    ASTExpression *Argrguments = ParseExpression(_Parser);
+
+                    Call -> Call.Args = realloc(Call -> Call.Args, sizeof(ASTExpression*) * (Call -> Call.ArgCount + 1));
+                    Call -> Call.Args[Call -> Call.ArgCount++] = Argrguments;
+
+                    if (!ParserMatch(_Parser, TOKEN_COMMA))
+                        break;
+                }
+
+                ParserMatch(_Parser, TOKEN_RPAREN);
+
+                Expression = Call;
+                
+                continue;
+            }
 
             if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
                 ParserError(_Parser, "expected ']' after index expression");
@@ -483,6 +547,7 @@ void ParserError(Parser *_Parser, const char *Message) {
 
     _Parser -> HasError = 1;
 
-    if (_Parser -> Current -> Type != TOKEN_EOF)
+    while (!IsSyncToken(_Parser -> Current -> Type)) {
         ParserAdvance(_Parser);
+    }
 }
