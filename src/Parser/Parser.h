@@ -11,23 +11,23 @@ typedef struct {
     int HasError;
 } Parser;
 
-ASTProgram *ParseProgram(Lexer *_Lexer);
-ASTSubprogram* ParseSubprogram(Lexer *_Lexer);
+ASTProgram *ParseProgram(Parser *_Parser);
+ASTSubprogram* ParseSubprogram(Parser *_Parser);
 
-ASTStatement* ParseStatement(Lexer *_Lexer);
-ASTStatement* ParseBlock(Lexer *_Lexer);
-ASTStatement* ParseVariableDeclaration(Lexer *_Lexer);
+ASTStatement* ParseStatement(Parser *_Parser);
+ASTStatement* ParseBlock(Parser *_Parser);
+ASTStatement* ParseVariableDeclaration(Parser *_Parser);
 
-ASTStatement* ParseIfStatement(Lexer *_Lexer);
-ASTStatement* ParseWhileStatement(Lexer *_Lexer);
-ASTStatement* ParseRepeatStatement(Lexer *_Lexer);
-ASTStatement* ParseForStatement(Lexer *_Lexer);
+ASTStatement* ParseIfStatement(Parser *_Parser);
+ASTStatement* ParseWhileStatement(Parser *_Parser);
+ASTStatement* ParseRepeatStatement(Parser *_Parser);
+ASTStatement* ParseForStatement(Parser *_Parser);
 
-ASTExpression* ParseExpression(Lexer *_Lexer);
-ASTExpression* ParseLiteral(Lexer *_Lexer);
-ASTExpression* ParseIdentifierOrCall(Lexer *_Lexer);
+ASTExpression* ParseExpression(Parser *_Parser);
+ASTExpression* ParseLiteral(Parser *_Parser);
+ASTExpression* ParseIdentifierOrCall(Parser *_Parser);
 
-ASTType* ParseType(Lexer *_Lexer);
+ASTType* ParseType(Parser *_Parser);
 
 Token* ParserPeek(Parser *_Parser);
 Token* ParserPrevious(Parser *_Parser);

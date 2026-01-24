@@ -4,8 +4,20 @@
 
 #include "Parser.h"
 
-ASTProgram *ParseProgram(Lexer *_Lexer) {
+ASTProgram *ParseProgram(Parser *_Parser) {
+    ASTProgram *Program = calloc(1, sizeof(ASTProgram));
 
+    while (!ParserCheck(_Parser, TOKEN_EOF)) {
+        if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+            Program -> Subprograms[Program -> SubprogramCount++] = ParseSubprogram(_Parser);
+        } else {
+            ASTStatement *Statement = ParseStatement(_Parser);
+
+            if (Statement != NULL) {
+                Program -> Statements[Program -> StatementCount++] = ParseStatement(_Parser);
+            }
+        }
+    }
 }
 
 Token *ParserPeek(Parser *_Parser) {
