@@ -79,6 +79,82 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     return Statement;
 }
 
+ASTStatement* ParseBlock(Parser *_Parser) {
+    ASTStatement *Block = calloc(1, sizeof(ASTStatement));
+
+    Block -> Kind = STMT_BLOCK;
+    
+
+    while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_EOF))
+        Block -> Block.Statements[Block -> Block.Count++] = ParseStatement(_Parser);
+
+    ParserMatch(_Parser, TOKEN_END);
+
+    return Block;
+}
+
+ASTStatement* ParseIfStatement(Parser *_Parser) {
+    ASTStatement *If = calloc(1, sizeof(ASTStatement));
+
+    If -> If.Condition = ParseExpression(_Parser);
+
+    ParserMatch(_Parser, TOKEN_THEN);
+
+    If -> If.ThenBlock = ParseBlock(_Parser);
+
+    return If;
+}
+
+ASTStatement* ParseWhileStatement(Parser *_Parser) {
+    ASTStatement *While = calloc(1, sizeof(ASTStatement));
+
+    While -> While.Condition = ParseExpression(_Parser);
+
+    ParserMatch(_Parser, TOKEN_DO);
+
+    While -> While.Body = ParseBlock(_Parser);
+
+    return While;
+}
+
+ASTStatement* ParseRepeatStatement(Parser *_Parser) {
+    ASTStatement *Repeat = calloc(1, sizeof(ASTStatement));
+
+    Repeat -> Repeat.Body = ParseBlock(_Parser);
+
+    ParserMatch(_Parser, TOKEN_UNTIL);
+
+    Repeat -> Repeat.Until = ParseExpression(_Parser);
+
+    return Repeat;
+}
+
+ASTStatement *ParseForStatement(Parser *_Parser) {
+    ASTStatement *For = calloc(1, sizeof(ASTStatement));
+
+    if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+        ParserError(_Parser, "expected iterator name");
+
+        return For;
+    }
+
+    For -> For.Iterator = ParserPrevious(_Parser) -> Start;
+
+    ParserMatch(_Parser, TOKEN_ASSIGN);
+
+    For -> For.Start = ParseExpression(_Parser);
+
+    ParserMatch(_Parser, TOKEN_DOT_DOT);
+
+    For -> For.End = ParseExpression(_Parser);
+
+    ParserMatch(_Parser, TOKEN_DO);
+
+    For -> For.Body = ParseBlock(_Parser);
+
+    return For;
+}
+
 Token *ParserPeek(Parser *_Parser) {
     return _Parser -> Current;
 }
