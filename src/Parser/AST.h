@@ -41,7 +41,8 @@ typedef enum {
     EXPR_LITERAL,
     EXPR_IDENTIFIER,
     EXPR_CALL,
-    EXPR_ARRAY_LITERAL
+    EXPR_ARRAY_LITERAL,
+    EXPR_INDEX
 } ASTExpressionKind;
 
 typedef enum {
@@ -140,6 +141,11 @@ typedef struct ASTExpression {
             struct ASTExpression **Elements;
             size_t Count;
         } Array;
+
+        struct {
+            struct ASTExpression *Target;
+            struct ASTExpression *Index;
+        } Index;
     };
 } ASTExpression;
 

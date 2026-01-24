@@ -30,6 +30,7 @@ ASTExpression *ParseExpression(Parser *_Parser);
 ASTExpression *ParseBinary(Parser *_Parser, int Precedence);
 ASTExpression *ParseUnary(Parser *_Parser);
 ASTExpression *ParsePrimary(Parser *_Parser);
+ASTExpression *ParsePostfix(Parser *_Parser);
 ASTExpression *ParseArrayLiteral(Parser *_Parser);
 
 ASTType *ParseType(Parser *_Parser);

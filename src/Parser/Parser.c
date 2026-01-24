@@ -232,17 +232,17 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
 }
 
 ASTExpression *ParseUnary(Parser *_Parser) {
-    if (ParserMatch(_Parser, TOKEN_MINUS) ||
-        ParserMatch(_Parser, TOKEN_NOT)) {
+    if (ParserMatch(_Parser, TOKEN_MINUS) || ParserMatch(_Parser, TOKEN_NOT)) {
         ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
 
+        Expression -> Kind = EXPR_UNARY;
         Expression -> Unary.Op = ParserPrevious(_Parser) -> Type;
         Expression -> Unary.Operand = ParseUnary(_Parser);
 
         return Expression;
     }
 
-    return ParsePrimary(_Parser);
+    return ParsePostfix(_Parser);
 }
 
 ASTExpression *ParsePrimary(Parser *_Parser) {
@@ -335,7 +335,36 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
     return ArrayLiteral;
 }
 
-ASTType* ParseType(Parser *_Parser) {
+ASTExpression *ParsePostfix(Parser *_Parser) {
+    ASTExpression *Expression = ParsePrimary(_Parser);
+
+    while (1) {
+        if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
+            ASTExpression *IndexExpr = ParseExpression(_Parser);
+            ASTExpression *Index = calloc(1, sizeof(ASTExpression));
+
+            if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
+                ParserError(_Parser, "expected ']' after index expression");
+
+                return Expression;
+            }
+
+            Index -> Kind = EXPR_INDEX;
+            Index -> Index.Target = Expression;
+            Index -> Index.Index = IndexExpr;
+
+            Expression = Index;
+
+            continue;
+        }
+        
+        break;
+    }
+
+    return Expression;
+}
+
+ASTType *ParseType(Parser *_Parser) {
     ASTType *Type = calloc(1, sizeof(ASTType));
 
     if (ParserMatch(_Parser, TOKEN_ARRAY)) {
@@ -365,11 +394,11 @@ Token *ParserPeek(Parser *_Parser) {
     return _Parser -> Current;
 }
 
-Token* ParserPrevious(Parser *_Parser) {
+Token *ParserPrevious(Parser *_Parser) {
     return &_Parser -> Tokens -> Data[_Parser -> Tokens -> Cursor - 1];
 }
 
-Token* ParserAdvance(Parser *_Parser) {
+Token *ParserAdvance(Parser *_Parser) {
     if (_Parser -> Current->Type != TOKEN_EOF)
         _Parser -> Current = &_Parser -> Tokens -> Data[++_Parser -> Tokens -> Cursor];
 
