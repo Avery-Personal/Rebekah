@@ -26,6 +26,17 @@ int GetOperatorPrecedence(TokenType Type) {
     }
 }
 
+Parser CreateParser(TokenStream *Tokens) {
+    Parser _Parser = {0};
+
+    _Parser.Tokens = Tokens;
+    _Parser.Current = &Tokens -> Data[0];
+
+    _Parser.HasError = 0;
+
+    return _Parser;
+}
+
 ASTProgram *ParseProgram(Parser *_Parser) {
     ASTProgram *Program = calloc(1, sizeof(ASTProgram));
 
@@ -92,7 +103,7 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_WHILE)) return ParseWhileStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_REPEAT)) return ParseRepeatStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturn(_Parser);
+    if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturnStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) return ParseVariableDeclaration(_Parser);
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));

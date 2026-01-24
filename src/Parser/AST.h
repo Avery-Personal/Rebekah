@@ -214,7 +214,7 @@ struct ASTStatement {
         } Call;
 
         struct {
-            ASTExpression *Expression
+            ASTExpression *Expression;
         } ExpressionStmt;
 
         struct {

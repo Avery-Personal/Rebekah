@@ -13,6 +13,8 @@ typedef struct {
 
 int GetOperatorPrecedence(TokenType Type);
 
+Parser CreateParser(TokenStream *Tokens);
+
 ASTProgram *ParseProgram(Parser *_Parser);
 ASTSubprogram *ParseSubprogram(Parser *_Parser);
 
