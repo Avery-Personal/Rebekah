@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -117,8 +118,14 @@ static void LexerErrorAt(Lexer *_Lexer, const char *Message) {
     _Lexer -> Error.Line = _Lexer -> Line;
     _Lexer -> Error.Column = _Lexer -> Column;
 
-    _Lexer -> Error.Message = Message ;
+    _Lexer -> Error.Message = Message;
     _Lexer -> HasError = 1;
+}
+
+static void LexerError(Lexer *_Lexer) {
+    fprintf(stderr, "[Lexer Error] Line %u:%u >> %s\n", _Lexer -> Error.Line, _Lexer -> Error.Column, _Lexer -> Error.Message);
+
+    exit(EXIT_FAILURE);
 }
 
 Token LexerNextToken(Lexer *_Lexer) {

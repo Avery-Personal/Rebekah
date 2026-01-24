@@ -18,6 +18,7 @@ char LexerPeek(Lexer *_Lexer);
 char LexerNext(Lexer *_Lexer);
 
 static void LexerErrorAt(Lexer *_Lexer, const char *Message);
+static void LexerError(Lexer *_Lexer);
 
 Token LexerNextToken(Lexer *_Lexer);
 TokenStream Tokenize(Lexer *_Lexer);
