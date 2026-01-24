@@ -348,8 +348,15 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
         return ArrayLiteral;
     }
 
-    while (1) {
-        ASTExpression *Element = ParseExpression(_Parser);
+    while (!ParserCheck(_Parser, TOKEN_EOF)) {
+        ASTExpression *Element = NULL;
+
+        if (ParserCheck(_Parser, TOKEN_LBRACKET)) {
+            ParserAdvance(_Parser);
+            Element = ParseArrayLiteral(_Parser);
+        } else {
+            Element = ParseExpression(_Parser);
+        }
 
         ArrayLiteral -> Array.Elements = realloc(ArrayLiteral -> Array.Elements, sizeof(ASTExpression *) * (ArrayLiteral -> Array.Count + 1));
         ArrayLiteral -> Array.Elements[ArrayLiteral -> Array.Count++] = Element;
@@ -361,8 +368,7 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
             break;
 
         ParserError(_Parser, "expected ',' or ']' in array literal");
-
-        break;
+        ParserAdvance(_Parser);
     }
 
     return ArrayLiteral;
