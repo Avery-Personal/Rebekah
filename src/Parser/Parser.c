@@ -4,6 +4,28 @@
 
 #include "Parser.h"
 
+int GetOperatorPrecedence(TokenType Type) {
+    switch (Type) {
+        case TOKEN_OR: return 1;
+        case TOKEN_AND: return 2;
+        case TOKEN_EQ:
+        case TOKEN_NE:
+        case TOKEN_LT:
+        case TOKEN_LE:
+        case TOKEN_GT:
+        case TOKEN_GE: return 3;
+        case TOKEN_PLUS:
+        case TOKEN_MINUS: return 4;
+        case TOKEN_STAR:
+        case TOKEN_SLASH:
+        case TOKEN_SLASH_SLASH:
+        case TOKEN_PERCENT: return 5;
+        case TOKEN_CARET: return 6;
+
+        default: return 0;
+    }
+}
+
 ASTProgram *ParseProgram(Parser *_Parser) {
     ASTProgram *Program = calloc(1, sizeof(ASTProgram));
 
@@ -93,6 +115,22 @@ ASTStatement* ParseBlock(Parser *_Parser) {
     return Block;
 }
 
+ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
+    ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
+    Variable -> VarDecl.Mutable = ParserMatch(_Parser, TOKEN_MUTABLE);
+
+    ParserMatch(_Parser, TOKEN_IDENTIFIER);
+    Variable -> VarDecl.Name = ParserPrevious(_Parser)->Start;
+
+    if (ParserMatch(_Parser, TOKEN_COLON))
+        Variable -> VarDecl.Type = ParseType(_Parser);
+
+    if (ParserMatch(_Parser, TOKEN_ASSIGN))
+        Variable -> VarDecl.Initializer = ParseExpression(_Parser);
+
+    return Variable;
+}
+
 ASTStatement* ParseIfStatement(Parser *_Parser) {
     ASTStatement *If = calloc(1, sizeof(ASTStatement));
 
@@ -153,6 +191,113 @@ ASTStatement *ParseForStatement(Parser *_Parser) {
     For -> For.Body = ParseBlock(_Parser);
 
     return For;
+}
+
+ASTStatement *ParseReturnStatement(Parser *_Parser) {
+    ASTStatement *Return = calloc(1, sizeof(ASTStatement));
+
+    if (!ParserCheck(_Parser, TOKEN_END))
+        Return -> Return.Value = ParseExpression(_Parser);
+
+    return Return;
+}
+
+ASTExpression *ParseExpression(Parser *_Parser) {
+    return ParseBinary(_Parser, 0);
+}
+
+ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
+    ASTExpression *Left = ParseUnary(_Parser);
+
+    while (1) {
+        Token *OperatorToken = ParserPeek(_Parser);
+
+        int OperatorPrecedence = GetOperatorPrecedence(OperatorToken -> Type);
+        if (OperatorPrecedence < Precedence)
+            break;
+
+        ParserAdvance(_Parser);
+
+        ASTExpression *Right = ParseBinary(_Parser, Precedence + 1);
+
+        ASTExpression *BinaryExpression = calloc(1, sizeof(ASTExpression));
+        BinaryExpression -> Binary.Left = Left;
+        BinaryExpression -> Binary.Right = Right;
+        BinaryExpression -> Binary.Op = OperatorToken -> Type;
+
+        Left = BinaryExpression;
+    }
+
+    return Left;
+}
+
+ASTExpression* ParseUnary(Parser *_Parser) {
+    if (ParserMatch(_Parser, TOKEN_MINUS) ||
+        ParserMatch(_Parser, TOKEN_NOT)) {
+        ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
+
+        Expression -> Unary.Op = ParserPrevious(_Parser) -> Type;
+        Expression -> Unary.Operand = ParseUnary(_Parser);
+
+        return Expression;
+    }
+
+    return ParsePrimary(_Parser);
+}
+
+ASTExpression* ParsePrimary(Parser *_Parser) {
+    ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
+
+    if (ParserMatch(_Parser, TOKEN_NUMBER)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Number = ParserPrevious(_Parser) -> Literal.Number;
+
+        return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_INTEGER)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Int = ParserPrevious(_Parser) -> Literal.Int;
+
+        return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_STRING_LITERAL)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.String = ParserPrevious(_Parser) -> Literal.String;
+
+        return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_CHAR_LITERAL)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Char = (char) ParserPrevious(_Parser) -> Literal.Int;
+
+        return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_TRUE)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Bool = 1;
+
+        return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_FALSE)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Bool = 0;
+
+        return Expression;
+    }
+
+    if (ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+        Expression -> Kind = EXPR_IDENTIFIER;
+        Expression -> Identifier = ParserPrevious(_Parser) -> Start;
+
+        return Expression;
+    }
+
+    if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+        Expression = ParseExpression(_Parser);
+
+        ParserMatch(_Parser, TOKEN_RPAREN);
+
+        return Expression;
+    }
+
+    ParserError(_Parser, "invalid expression");
+
+    return Expression;
 }
 
 Token *ParserPeek(Parser *_Parser) {

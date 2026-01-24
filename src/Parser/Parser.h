@@ -11,6 +11,8 @@ typedef struct {
     int HasError;
 } Parser;
 
+int GetOperatorPrecedence(TokenType Type);
+
 ASTProgram *ParseProgram(Parser *_Parser);
 ASTSubprogram* ParseSubprogram(Parser *_Parser);
 
@@ -22,7 +24,7 @@ ASTStatement* ParseIfStatement(Parser *_Parser);
 ASTStatement* ParseWhileStatement(Parser *_Parser);
 ASTStatement* ParseRepeatStatement(Parser *_Parser);
 ASTStatement* ParseForStatement(Parser *_Parser);
-ASTStatement* ParseReturn(Parser *_Parser);
+ASTStatement* ParseReturnStatement(Parser *_Parser);
 
 ASTExpression* ParseExpression(Parser *_Parser);
 ASTExpression* ParseBinary(Parser *_Parser, int Precedence);

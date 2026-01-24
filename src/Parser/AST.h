@@ -204,7 +204,6 @@ struct ASTStatement {
         struct {
             ASTExpression *Expression
         } ExpressionStmt;
-        
 
         struct {
             ASTStatement **Statements;
