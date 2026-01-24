@@ -1,0 +1,99 @@
+CONST Dataset : Integer = 1; -- 0 = And | 1 = Or
+CONST LearningRate : Float = 0.1;
+
+MUTABLE Epoch : Integer = 1
+MUTABLE Error : Float = 0.0
+MUTABLE ErrorOccurred : Boolean = false
+
+function Step(Value : Float) -> Float is
+begin
+    if Value >= 0.0 then
+        return 1.0
+    else
+        return 0.0
+    end
+end Step
+
+function ForwardPass(Weights : Array<Float>, InputAmount : Integer, MUTABLE Bias : Float, Inputs : Array<Float>, ExpectedOutput : Float) -> Float is
+begin
+    MUTABLE Sum : Float := 0.0
+
+    for i in 0 .. InputAmount - 1 do
+        Sum := Sum + (Weights[i] * Inputs[i])
+    end
+
+    Sum := Sum + Bias
+    MUTABLE Output : Float = Step(Sum)
+
+    Error := ExpectedOutput - Output
+    if Error != 0.0 then
+        ErrorOccurred = true
+    end
+
+    output("Expected output:", ExpectedOutput)
+    output("Error:", Error)
+
+    for i in 0 .. InputAmount - 1 do
+        Weights[i] := Weights[i] + (LearningRate * Error * Inputs[i])
+    end
+
+    Bias := Bias + (LearningRate * Error)
+
+    output("Weighted sum (z):", Sum)
+
+    return Output
+end ForwardPass
+
+method Main is
+begin
+    Inputs : Array<Array<Float>> = [
+        [0.0, 0.0],
+        [0.0, 1.0],
+        [1.0, 0.0],
+        [1.0, 1.0]
+    ]
+
+    ExpectedOutputs : Array<Array<Float>> = [
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 1.0, 1.0, 1.0]
+    ]
+
+    MUTABLE InputAmount : Integer = 2
+    MUTABLE Weights : Array<Float> = [0.0, 0.0]
+    MUTABLE Bias : Float = 0.0
+
+    MUTABLE Activations : Integer = 0
+
+    output("====================")
+
+    repeat
+        ErrorOccurred := false
+        Activations := 0
+
+        output("Epoch:", Epoch)
+
+        for i in 0 .. 3 do
+            MUTABLE OutputValue : Float := ForwardPass(Weights, InputAmount, Bias, Inputs[i], ExpectedOutputs[Dataset][i])
+            if OutputValue == 1.0 then
+                Activations := Activations + 1
+            end
+
+            output("Inputs:", Inputs[i])
+            output("Bias:", Bias)
+            output("Output:", OutputValue)
+        end
+
+        output("====================")
+
+        Epoch := Epoch + 1
+    until
+        not ErrorOccurred
+
+    output("Total Epochs:", Epoch - 1)
+
+    if Activations == 1 then
+        output("Final Guess: And")
+    else
+        output("Final Guess: Or")
+    end
+end Main
