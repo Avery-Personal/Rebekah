@@ -184,6 +184,14 @@ ASTStatement *ParseStatement(Parser *_Parser) {
         return Statement;
     }
 
+    if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) {
+        return ParseVariableDeclaration(_Parser);
+    }
+
+    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_COLON)) {
+        return ParseVariableDeclaration(_Parser);
+    }
+
     if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
         ParserError(_Parser, "subprograms are only allowed at block level");
 
@@ -196,8 +204,6 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_REPEAT)) return ParseRepeatStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturnStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) return ParseVariableDeclaration(_Parser);
-    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_COLON)) return ParseVariableDeclaration(_Parser);
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
 
@@ -244,7 +250,7 @@ ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
 
     Variable -> Kind = STMT_VAR_DECL;
-    Variable -> VarDecl.Mutable = ParserMatch(_Parser, TOKEN_MUTABLE);
+    Variable -> VarDecl.Mutable = 0;
 
     if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
         ParserError(_Parser, "expected variable name");
@@ -252,7 +258,7 @@ ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
         return Variable;
     }
 
-    Variable -> VarDecl.Name = ParserPrevious(_Parser)->Start;
+    Variable -> VarDecl.Name = ParserPrevious(_Parser) -> Start;
 
     if (ParserMatch(_Parser, TOKEN_COLON))
         Variable -> VarDecl.Type = ParseType(_Parser);
@@ -324,6 +330,8 @@ ASTStatement *ParseRepeatStatement(Parser *_Parser) {
 
 ASTStatement *ParseForStatement(Parser *_Parser) {
     ASTStatement *For = calloc(1, sizeof(ASTStatement));
+    
+    For -> Kind = STMT_FOR;
 
     if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
         ParserError(_Parser, "expected iterator name");
@@ -331,7 +339,6 @@ ASTStatement *ParseForStatement(Parser *_Parser) {
         return For;
     }
     
-    For -> Kind = STMT_FOR;
     For -> For.Iterator = ParserPrevious(_Parser) -> Start;
     ParserMatch(_Parser, TOKEN_ASSIGN);
 
@@ -448,6 +455,8 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     }
 
     if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+        free(Expression);
+
         Expression = ParseExpression(_Parser);
 
         ParserMatch(_Parser, TOKEN_RPAREN);
@@ -455,7 +464,9 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
         return Expression;
     }
 
-    if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
+    if (ParserCheck(_Parser, TOKEN_LBRACKET)) {
+        free(Expression);
+
         return ParseArrayLiteral(_Parser);
     }
 
