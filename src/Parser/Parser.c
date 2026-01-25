@@ -84,11 +84,12 @@ ASTProgram *ParseProgram(Parser *_Parser) {
 
     while (!ParserCheck(_Parser, TOKEN_EOF)) {
         if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+            Program -> Subprograms = realloc(Program -> Subprograms, sizeof(ASTSubprogram*) * (Program -> SubprogramCount + 1));
             Program -> Subprograms[Program -> SubprogramCount++] = ParseSubprogram(_Parser);
         } else {
             ASTStatement *Statement = ParseStatement(_Parser);
             if (Statement) {
-                Program -> Subprograms[Program -> SubprogramCount++] = ParseSubprogram(_Parser);
+                Program -> Statements = realloc(Program -> Statements, sizeof(ASTStatement*) * (Program -> StatementCount + 1));
                 Program -> Statements[Program -> StatementCount++] = Statement;
             }
         }
@@ -110,37 +111,41 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 
     Function -> Name = ParserPrevious(_Parser) -> Start;
 
-    ParserMatch(_Parser, TOKEN_LPAREN);
+    if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+        while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
+            if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
+                ParserError(_Parser, "expected parameter name");
 
-    while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
-        if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
-            ParserError(_Parser, "expected parameter name");
+                break;
+            }
 
-            break;
+            const char *ParamName = ParserPrevious(_Parser) -> Start;
+
+            if (!ParserMatch(_Parser, TOKEN_COLON)) {
+                ParserError(_Parser, "expected ':' after parameter name");
+
+                break;
+            }
+
+            ASTType *ParamType = ParseType(_Parser);
+
+            Function -> Params = realloc(Function -> Params, sizeof(*Function -> Params) * (Function -> ParamCount + 1));
+            
+            Function -> Params[Function -> ParamCount].Name = ParamName;
+            Function -> Params[Function -> ParamCount].Type = ParamType;
+            Function -> ParamCount++;
+
+            if (!ParserMatch(_Parser, TOKEN_COMMA))
+                break;
         }
 
-        if (!ParserMatch(_Parser, TOKEN_COLON)) {
-            ParserError(_Parser, "expected ':' after parameter name");
-
-            break;
+        if (!ParserMatch(_Parser, TOKEN_RPAREN)) {
+            ParserError(_Parser, "expected ')' after parameters");
         }
-
-        const char *ParamName = ParserPrevious(_Parser) -> Start;
-        ASTType *ParamType = ParseType(_Parser);
-
-        Function -> Params = realloc(Function -> Params, sizeof(*Function -> Params) * (Function -> ParamCount + 1));
-        
-        Function -> Params[Function -> ParamCount].Name = ParamName;
-        Function -> Params[Function -> ParamCount].Type = ParamType;
-        Function -> ParamCount++;
-
-        ParserMatch(_Parser, TOKEN_COMMA);
     }
 
-    ParserMatch(_Parser, TOKEN_RPAREN);
-
     if (ParserMatch(_Parser, TOKEN_ARROW)) {
-        Function->ReturnType = ParseType(_Parser);
+        Function -> ReturnType = ParseType(_Parser);
     }
 
     if (!ParserMatch(_Parser, TOKEN_IS)) {
@@ -192,11 +197,11 @@ ASTStatement *ParseStatement(Parser *_Parser) {
         return ParseVariableDeclaration(_Parser);
     }
 
-    if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
-        ParserError(_Parser, "subprograms are only allowed at block level");
+    //if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+    //    ParserError(_Parser, "subprograms are only allowed at block level");
 
-        return NULL;
-    }
+    //    return NULL;
+    //}
 
     if (ParserMatch(_Parser, TOKEN_BEGIN)) return ParseBlock(_Parser);
     if (ParserMatch(_Parser, TOKEN_IF)) return ParseIfStatement(_Parser);
@@ -222,6 +227,8 @@ ASTStatement *ParseBlock(Parser *_Parser) {
     ASTStatement *Block = calloc(1, sizeof(ASTStatement));
 
     Block -> Kind = STMT_BLOCK;
+
+    ParserMatch(_Parser, TOKEN_BEGIN);
     
     while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_EOF)) {
         if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
@@ -248,9 +255,10 @@ ASTStatement *ParseBlock(Parser *_Parser) {
 
 ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
+    Token *Previous = ParserPrevious(_Parser);
 
     Variable -> Kind = STMT_VAR_DECL;
-    Variable -> VarDecl.Mutable = 0;
+    Variable -> VarDecl.Mutable = (Previous -> Type == TOKEN_MUTABLE);
 
     if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
         ParserError(_Parser, "expected variable name");
@@ -260,8 +268,13 @@ ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
 
     Variable -> VarDecl.Name = ParserPrevious(_Parser) -> Start;
 
-    if (ParserMatch(_Parser, TOKEN_COLON))
-        Variable -> VarDecl.Type = ParseType(_Parser);
+    if (!ParserMatch(_Parser, TOKEN_COLON)) {
+        ParserError(_Parser, "expected ':' after variable name");
+        
+        return Variable;
+    }
+
+    Variable -> VarDecl.Type = ParseType(_Parser);
 
     if (ParserMatch(_Parser, TOKEN_ASSIGN)) {
         if (ParserCheck(_Parser, TOKEN_LBRACKET)) { 
@@ -338,7 +351,7 @@ ASTStatement *ParseForStatement(Parser *_Parser) {
 
         return For;
     }
-    
+
     For -> For.Iterator = ParserPrevious(_Parser) -> Start;
     ParserMatch(_Parser, TOKEN_ASSIGN);
 
