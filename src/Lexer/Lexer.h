@@ -7,6 +7,8 @@ int IsDigit(int Character);
 int IsAlphanumericNumber(int Character);
 int IsAlphanumeric(int Character);
 
+const char *TokenTypeToString(TokenType Type);
+
 int LexerIsAtEnd(Lexer *_Lexer);
 void LexerSkipWC(Lexer *_Lexer);
 

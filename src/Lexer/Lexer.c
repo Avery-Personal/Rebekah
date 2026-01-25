@@ -26,6 +26,97 @@ int IsAlphanumeric(int Character) {
         return 0;
 }
 
+const char *TokenTypeToString(TokenType Type) {
+    switch (Type) {
+        case TOKEN_IDENTIFIER: return "IDENTIFIER";
+        case TOKEN_NUMBER: return "NUMBER";
+        case TOKEN_ARRAY: return "ARRAY";
+        case TOKEN_CHAR_LITERAL: return "CHAR_LITERAL";
+        case TOKEN_STRING_LITERAL :return "STRING_LITERAL";
+        case TOKEN_NULL: return "NULL";
+        case TOKEN_VOID: return "VOID";
+        case TOKEN_TRUE: return "TRUE";
+        case TOKEN_FALSE: return "FALSE";
+
+        case TOKEN_TYPE: return "TYPE";
+        case TOKEN_AS: return "AS";
+        case TOKEN_MUTABLE: return "MUTABLE";
+        case TOKEN_CONSTANT: return "CONSTANT";
+
+        case TOKEN_METHOD: return "METHOD";
+        case TOKEN_PROCEDURE: return "PROCEDURE";
+        case TOKEN_FUNCTION: return "FUNCTION";
+        case TOKEN_BEGIN: return "BEGIN";
+        case TOKEN_END: return "END";
+        case TOKEN_RETURN: return "RETURN";
+        case TOKEN_IS: return "IS";
+        case TOKEN_NEWLINE: return "NEWLINE";
+
+        case TOKEN_IF: return "IF";
+        case TOKEN_ELSE: return "ELSE";
+        case TOKEN_ELSEIF: return "ELSEIF";
+        case TOKEN_THEN: return "THEN";
+        case TOKEN_WHILE: return "WHILE";
+        case TOKEN_REPEAT: return "REPEAT";
+        case TOKEN_UNTIL: return "UNTIL";
+        case TOKEN_FOR: return "FOR";
+        case TOKEN_DO: return "DO";
+        case TOKEN_BREAK: return "BREAK";
+        case TOKEN_CONTINUE: return "CONTINUE";
+
+        case TOKEN_AND: return "AND";
+        case TOKEN_OR: return "OR";
+        case TOKEN_NOT: return "NOT";
+
+        case TOKEN_PLUS: return "PLUS";
+        case TOKEN_MINUS: return "MINUS";
+        case TOKEN_STAR: return "STAR";
+        case TOKEN_SLASH: return "SLASH";
+        case TOKEN_SLASH_SLASH: return "INT_DIV";
+        case TOKEN_PERCENT: return "PERCENT";
+        case TOKEN_CARET: return "CARET";
+
+        case TOKEN_EQ: return "EQ";
+        case TOKEN_NE: return "NE";
+        case TOKEN_LT: return "LT";
+        case TOKEN_LE: return "LE";
+        case TOKEN_GT: return "GT";
+        case TOKEN_GE: return "GE";
+
+        case TOKEN_ASSIGN: return "ASSIGN";
+        case TOKEN_ARROW: return "ARROW";
+        case TOKEN_QUESTION: return "QUESTION";
+
+        case TOKEN_BIT_AND: return "BIT_AND";
+        case TOKEN_BIT_OR: return "BIT_OR";
+        case TOKEN_BIT_XOR: return "BIT_XOR";
+        case TOKEN_BIT_NOT: return "BIT_NOT";
+        case TOKEN_SHIFT_LEFT: return "SHIFT_LEFT";
+        case TOKEN_SHIFT_RIGHT: return "SHIFT_RIGHT";
+
+        case TOKEN_HASH: return "HASH";
+        case TOKEN_PIPE: return "PIPE";
+        case TOKEN_DOT: return "DOT";
+        case TOKEN_DOT_DOT: return "RANGE";
+
+        case TOKEN_LPAREN: return "LPAREN";
+        case TOKEN_RPAREN: return "RPAREN";
+        case TOKEN_LBRACE: return "LBRACE";
+        case TOKEN_RBRACE: return "RBRACE";
+        case TOKEN_LBRACKET: return "LBRACKET";
+        case TOKEN_RBRACKET: return "RBRACKET";
+        case TOKEN_COMMA: return "COMMA";
+        case TOKEN_SEMICOLON: return "SEMICOLON";
+        case TOKEN_COLON: return "COLON";
+        case TOKEN_DOUBLE_COLON: return "DOUBLE_COLON";
+
+        case TOKEN_EOF: return "EOF";
+        case TOKEN_ERROR: return "ERROR";
+
+        default: return "UNKNOWN";
+    }
+}
+
 int LexerIsAtEnd(Lexer *_Lexer) {
     return _Lexer -> Cursor >= _Lexer -> Length;
 }
@@ -67,7 +158,7 @@ TokenType ResolveIdentifier(const char* Start, size_t Len) {
     if (Len == 5 && memcmp(Start, "begin", 5) == 0) return TOKEN_BEGIN;
     if (Len == 3 && memcmp(Start, "end", 3) == 0) return TOKEN_END;
     if (Len == 2 && memcmp(Start, "is", 2) == 0) return TOKEN_IS;
-    if (Len == 7 && memcmp(Start, "return", 7) == 0) return TOKEN_RETURN;
+    if (Len == 6 && memcmp(Start, "return", 6) == 0) return TOKEN_RETURN;
     if (Len == 5 && memcmp(Start, "while", 5) == 0) return TOKEN_WHILE;
     if (Len == 6 && memcmp(Start, "repeat", 6) == 0) return TOKEN_REPEAT;
     if (Len == 5 && memcmp(Start, "until", 5) == 0) return TOKEN_UNTIL;
@@ -289,11 +380,12 @@ Token LexerNextToken(Lexer *_Lexer) {
                 break;
 
             case '>':
-                if (LexerPeek(_Lexer) == '>') {
-                    LexerNext(_Lexer);
+                //if (LexerPeek(_Lexer) == '>') {
+                //    LexerNext(_Lexer);
 
-                    _Token.Type = TOKEN_SHIFT_RIGHT;                
-                } else if (LexerPeek(_Lexer) == '=') {
+                //    _Token.Type = TOKEN_SHIFT_RIGHT;                
+                //} else 
+                if (LexerPeek(_Lexer) == '=') {
                     LexerNext(_Lexer);
                     
                     _Token.Type = TOKEN_GE;
@@ -362,6 +454,8 @@ TokenStream Tokenize(Lexer *_Lexer) {
             _TokenStream.Capacity *= 2;
             _TokenStream.Data = realloc(_TokenStream.Data, sizeof(Token) * _TokenStream.Capacity);
         }
+
+        // DEBUGGING USE | printf("[Lexer] Line %i:%i | %s | Symbol: %.*s\n", _Lexer -> Line, _Lexer -> Column, TokenTypeToString(_Token.Type), _Token.Length, _Token.Start ? _Token.Start : "");
 
         _TokenStream.Data[_TokenStream.Count++] = _Token;
 

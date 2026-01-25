@@ -13,6 +13,7 @@ typedef struct {
 
 int IsSyncToken(TokenType Type);
 int GetOperatorPrecedence(TokenType Type);
+ASTOperator TokenToOperator(TokenType Type);
 
 Parser CreateParser(TokenStream *Tokens);
 
