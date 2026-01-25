@@ -85,7 +85,6 @@ typedef enum {
     STMT_CONTINUE,
     STMT_CALL,
     STMT_BLOCK,
-    STMT_SUBPROGRAM,
 } ASTStmtKind;
 
 typedef enum {

@@ -1,0 +1,53 @@
+procedure Log(Str : String) is
+    output(Str)
+end Log
+
+function Sum(A : Float, B : Float) -> Float is
+    return A + B
+end Sum
+
+function Multiply(A : Float, B : Float) -> Float is
+    return A * B
+end Sum
+
+method Main is
+begin
+    _Array_ : Array<Array<Array<Integer>>> = [
+        [
+            [6, 1, 89, 24]
+        ],
+        [
+            [1, 2]
+        ]
+    ]
+
+    CONST Learning : Integer = 0
+
+    x : Integer = 2
+    y : Integer = 7
+    z : Integer = 24
+
+    Loops : Integer = 5
+
+    if x * y < z then
+        print($"{x} * {y} LESS than {z}")
+    elseif x * y > z then
+        print($"{x} * {y} GREATER than {z}")
+    else
+        print($"{x} * {y} IS {z}")
+    end
+
+    for i in 0 .. Loops - 1 do
+        output(i)
+    end
+
+    while Learning == 1 do
+        MUTABLE Count : Integer = 1
+
+        output(Count)
+
+        Count := Count + 1
+    end
+
+    Log(IO.ToString(Multiply(Sum(4, 9), Multiply(Multiply(7, 1.8), Sum(0, 2.5)))))
+end Main

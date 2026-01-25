@@ -1,5 +1,5 @@
-CONST Dataset : Integer = 1; -- 0 = And | 1 = Or
-CONST LearningRate : Float = 0.1;
+CONST Dataset : Integer = 1 -- 0 = And | 1 = Or
+CONST LearningRate : Float = 0.1
 
 MUTABLE Epoch : Integer = 1
 MUTABLE Error : Float = 0.0

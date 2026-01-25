@@ -44,6 +44,7 @@ Token *ParserAdvance(Parser *_Parser);
 
 int ParserMatch(Parser *_Parser, TokenType Type);
 int ParserCheck(Parser *_Parser, TokenType Type);
+int ParserCheckNext(Parser *_Parser, TokenType Type);
 
 static void ParserError(Parser *_Parser, const char *Message);
 

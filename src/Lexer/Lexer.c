@@ -124,8 +124,6 @@ static void LexerErrorAt(Lexer *_Lexer, const char *Message) {
 
 static void LexingError(Lexer *_Lexer) {
     fprintf(stderr, "[Lexer Error] Line %u:%u >> %s\n", _Lexer -> Error.Line, _Lexer -> Error.Column, _Lexer -> Error.Message);
-
-    exit(EXIT_FAILURE);
 }
 
 Token LexerNextToken(Lexer *_Lexer) {
@@ -187,6 +185,7 @@ Token LexerNextToken(Lexer *_Lexer) {
 
             if (NextCharacter == '\n') {
                 LexerErrorAt(_Lexer, "newline in string literal");
+                LexingError(_Lexer);
 
                 break;
             }
@@ -195,8 +194,10 @@ Token LexerNextToken(Lexer *_Lexer) {
                 LexerNext(_Lexer);
         }
 
-        if (LexerIsAtEnd(_Lexer))
+        if (LexerIsAtEnd(_Lexer)) {
             LexerErrorAt(_Lexer, "unterminated string literal");
+            LexingError(_Lexer);
+        }
 
         _Token.Start = _Lexer -> Source + Start;
         _Token.Length = _Lexer -> Cursor - Start - 1;
@@ -207,6 +208,7 @@ Token LexerNextToken(Lexer *_Lexer) {
 
         if (LexerNext(_Lexer) != '\'') {
             LexerErrorAt(_Lexer, "invalid character literal");
+            LexingError(_Lexer);
         }
 
         _Token.Type = TOKEN_CHAR_LITERAL;
@@ -340,6 +342,7 @@ Token LexerNextToken(Lexer *_Lexer) {
                 _Token.Type = TOKEN_ERROR;
 
                 LexerErrorAt(_Lexer, "unexpected character");
+                LexingError(_Lexer);
         }
     }
 

@@ -65,10 +65,8 @@ ASTProgram *ParseProgram(Parser *_Parser) {
             Program -> Subprograms[Program -> SubprogramCount++] = ParseSubprogram(_Parser);
         } else {
             ASTStatement *Statement = ParseStatement(_Parser);
-
-            if (Statement != NULL) {
-                Program -> Statements[Program -> StatementCount++] = ParseStatement(_Parser);
-            }
+            if (Statement)
+                Program -> Statements[Program -> StatementCount++] = Statement;
         }
     }
 }
@@ -134,11 +132,15 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 }
 
 ASTStatement *ParseStatement(Parser *_Parser) {
-    if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_ASSIGN)) {
         ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
 
-        Statement -> Kind = STMT_SUBPROGRAM;
-        Statement -> Block.Subprograms = ParseSubprogram(_Parser);
+        Statement -> Kind = STMT_ASSIGN;
+        Statement -> Assign.Target = ParseExpression(_Parser);
+
+        ParserMatch(_Parser, TOKEN_ASSIGN);
+
+        Statement -> Assign.Value = ParseExpression(_Parser);
 
         return Statement;
     }
@@ -150,7 +152,7 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturnStatement(_Parser);
     if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) return ParseVariableDeclaration(_Parser);
-    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheck(_Parser, TOKEN_COLON)) return ParseVariableDeclaration(_Parser);
+    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_COLON)) return ParseVariableDeclaration(_Parser);
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
     Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
@@ -447,32 +449,31 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
     ASTExpression *Expression = ParsePrimary(_Parser);
 
     while (1) {
-        if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
-            ASTExpression *IndexExpr = ParseExpression(_Parser);
-            ASTExpression *Index = calloc(1, sizeof(ASTExpression));
+        if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+            ASTExpression *Call = calloc(1, sizeof(ASTExpression));
 
-            if (ParserMatch(_Parser, TOKEN_LPAREN)) {
-                ASTExpression *Call = calloc(1, sizeof(ASTExpression));
+            Call -> Kind = EXPR_CALL;
+            Call -> Call.Callee = Expression;
 
-                Call -> Kind = EXPR_CALL;
-                Call -> Call.Callee = Expression;
+            while (!ParserCheck(_Parser, TOKEN_RPAREN)) {
+                ASTExpression *Arguments = ParseExpression(_Parser);
 
-                while (!ParserCheck(_Parser, TOKEN_RPAREN)) {
-                    ASTExpression *Arguments = ParseExpression(_Parser);
+                Call -> Call.Args = realloc(Call -> Call.Args, sizeof(ASTExpression*) * (Call -> Call.ArgCount + 1));
+                Call -> Call.Args[Call -> Call.ArgCount++] = Arguments;
 
-                    Call -> Call.Args = realloc(Call -> Call.Args, sizeof(ASTExpression*) * (Call -> Call.ArgCount + 1));
-                    Call -> Call.Args[Call -> Call.ArgCount++] = Arguments;
-
-                    if (!ParserMatch(_Parser, TOKEN_COMMA))
-                        break;
-                }
-
-                ParserMatch(_Parser, TOKEN_RPAREN);
-
-                Expression = Call;
-                
-                continue;
+                if (!ParserMatch(_Parser, TOKEN_COMMA))
+                    break;
             }
+
+            ParserMatch(_Parser, TOKEN_RPAREN);
+
+            Expression = Call;
+            
+            continue;
+        }
+
+        if (ParserMatch(_Parser, TOKEN_LBRACKET)) {
+            ASTExpression *Index = calloc(1, sizeof(ASTExpression));
 
             if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
                 ParserError(_Parser, "expected ']' after index expression");
@@ -482,7 +483,7 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
 
             Index -> Kind = EXPR_INDEX;
             Index -> Index.Target = Expression;
-            Index -> Index.Index = IndexExpr;
+            Index -> Index.Index = ParseExpression(_Parser);
 
             Expression = Index;
 
@@ -540,6 +541,13 @@ int ParserCheck(Parser *_Parser, TokenType Type) {
     return _Parser -> Current -> Type == Type;
 }
 
+int ParserCheckNext(Parser *_Parser, TokenType Type) {
+    if (_Parser -> Current -> Type == TOKEN_EOF)
+        return 0;
+
+    return _Parser -> Tokens -> Data[_Parser -> Tokens -> Cursor + 1].Type == Type;
+}
+
 int ParserMatch(Parser *_Parser, TokenType Type) {
     if (ParserCheck(_Parser, Type)) {
         ParserAdvance(_Parser);
@@ -551,6 +559,19 @@ int ParserMatch(Parser *_Parser, TokenType Type) {
 }
 
 void ParserError(Parser *_Parser, const char *Message) {
+    static int PreviousLine;
+    static int PreviousColumn;
+
+    int Line = _Parser -> Current -> Line;
+    int Column  = _Parser -> Current -> Column;
+
+    if (Line == PreviousLine && Column == PreviousColumn) {
+        exit(0);
+    }
+
+    PreviousLine = Line;
+    PreviousColumn = Column;
+
     fprintf(stderr, "[Parse Error] Line %u:%u >> %s\n", _Parser -> Current -> Line, _Parser -> Current -> Column, Message);
 
     _Parser -> HasError = 1;
