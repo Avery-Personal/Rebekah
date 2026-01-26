@@ -1,18 +1,13 @@
 -- Fallback test file when version/component fails; holds absolutely bare bones Rebekah code
 
-x : Integer = 5
-Char : Character = 'H'
+method Main is
+begin
+    x : Integer = 5
+    Char : Character = 'H'
 
-output(x)
+    output(x)
 
-x := x + 5
+    x := x + 5
 
-output(x)
-
-if x < 10 then
-    output("x is LESS than 10")
-else if x > 10 then
-    output("x is GREATER than 10")
-else
-    output("x IS 10")
-end
+    output(x)
+end Main

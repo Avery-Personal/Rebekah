@@ -4,12 +4,20 @@
 #include "../Lexer/Lexer.h"
 #include "AST.h"
 
+#define PARSER_TRACE 1
+
 typedef struct {
     TokenStream *Tokens;
     Token *Current;
 
     int HasError;
 } Parser;
+
+typedef struct {
+    const char *FunctionName;
+
+    int Depth;
+} TraceEntry;
 
 int IsSyncToken(TokenType Type);
 int GetOperatorPrecedence(TokenType Type);
@@ -48,5 +56,9 @@ int ParserCheck(Parser *_Parser, TokenType Type);
 int ParserCheckNext(Parser *_Parser, TokenType Type);
 
 static void ParserError(Parser *_Parser, const char *Message);
+
+static void TraceEnter(const char *FunctionName, Parser *_Parser);
+static void TraceExit(const char *FunctionName, Parser *_Parser);
+static void TraceToken(const char *Action, Parser *_Parser);
 
 #endif

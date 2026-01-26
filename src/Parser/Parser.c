@@ -4,6 +4,9 @@
 
 #include "Parser.h"
 
+static TraceEntry TraceStack[256];
+static int TraceDepth = 0;
+
 int IsSyncToken(TokenType Type) {
     switch (Type) {
         case TOKEN_END:
@@ -82,6 +85,8 @@ Parser CreateParser(TokenStream *Tokens) {
 ASTProgram *ParseProgram(Parser *_Parser) {
     ASTProgram *Program = calloc(1, sizeof(ASTProgram));
 
+    TraceEnter("ParseProgram", _Parser);
+
     while (!ParserCheck(_Parser, TOKEN_EOF)) {
         if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
             Program -> Subprograms = realloc(Program -> Subprograms, sizeof(ASTSubprogram*) * (Program -> SubprogramCount + 1));
@@ -95,29 +100,42 @@ ASTProgram *ParseProgram(Parser *_Parser) {
         }
     }
 
+    TraceExit("ParseProgram", _Parser);
+
     return Program;
 }
 
 ASTSubprogram *ParseSubprogram(Parser *_Parser) {
     ASTSubprogram *Function = calloc(1, sizeof(ASTSubprogram));
 
+    TraceEnter("ParseSubprogram", _Parser);
+
     Function -> Kind = ParserAdvance(_Parser) -> Type;
+
+    TraceToken("Advanced", _Parser);
 
     if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
         ParserError(_Parser, "expected subprogram name");
+        TraceExit("ParseSubprogram", _Parser);
 
         return Function;
     }
 
+    TraceToken("Matched IDENTIFIER", _Parser);
+
     Function -> Name = ParserPrevious(_Parser) -> Start;
 
     if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+        TraceToken("Matched LPAREN", _Parser);
+
         while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
             if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
                 ParserError(_Parser, "expected parameter name");
 
                 break;
             }
+
+            TraceToken("Matched param IDENTIFIER", _Parser);
 
             const char *ParamName = ParserPrevious(_Parser) -> Start;
 
@@ -126,6 +144,8 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 
                 break;
             }
+
+            TraceToken("Matched COLON", _Parser);
 
             ASTType *ParamType = ParseType(_Parser);
 
@@ -137,6 +157,8 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 
             if (!ParserMatch(_Parser, TOKEN_COMMA))
                 break;
+
+            TraceToken("Matched COMMA", _Parser);
         }
 
         if (!ParserMatch(_Parser, TOKEN_RPAREN)) {
@@ -145,12 +167,16 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
     }
 
     if (ParserMatch(_Parser, TOKEN_ARROW)) {
+        TraceToken("Matched ARROW", _Parser);
+
         Function -> ReturnType = ParseType(_Parser);
     }
 
     if (!ParserMatch(_Parser, TOKEN_IS)) {
         ParserError(_Parser, "expected 'is' before subprogram body");
     }
+
+    TraceToken("Matched IS", _Parser);
 
     ASTStatement *Block = ParseBlock(_Parser);
 
@@ -159,24 +185,32 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 
     free(Block);
 
+    TraceExit("ParseSubprogram", _Parser);
+
     return Function;
 }
 
 ASTStatement *ParseStatement(Parser *_Parser) {
+    TraceEnter("ParseStatement", _Parser);
+    
     if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_ASSIGN)) {
         ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
         ASTExpression *Target = ParsePrimary(_Parser);
 
         Statement -> Kind = STMT_ASSIGN;
 
+        TraceToken("Detected assignment", _Parser);
+
         if (Target -> Kind != EXPR_IDENTIFIER && Target -> Kind != EXPR_INDEX) {
             ParserError(_Parser, "invalid assignment target");
+            TraceExit("ParseStatement", _Parser);
 
             return NULL;
         }
 
         if (!ParserMatch(_Parser, TOKEN_ASSIGN)) {
             ParserError(_Parser, "expected ':=' after target");
+            TraceExit("ParseStatement", _Parser);
             
             return NULL;
         }
@@ -186,29 +220,68 @@ ASTStatement *ParseStatement(Parser *_Parser) {
         Statement -> Assign.Target = Target;
         Statement -> Assign.Value  = Value;
 
+        TraceExit("ParseStatement", _Parser);
+
         return Statement;
     }
 
     if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) {
+        TraceToken("Matched MUTABLE/CONSTANT", _Parser);
+        TraceExit("ParseStatement", _Parser);
+
         return ParseVariableDeclaration(_Parser, 1);
     }
 
     if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_COLON)) {
+        TraceToken("Detected variable declaration", _Parser);
+        TraceExit("ParseStatement", _Parser);
+        
         return ParseVariableDeclaration(_Parser, 0);
     }
 
     if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
         ParserError(_Parser, "subprograms are only allowed at block level");
+        TraceExit("ParseStatement", _Parser);
 
         return NULL;
     }
 
-    if (ParserMatch(_Parser, TOKEN_BEGIN)) return ParseBlock(_Parser);
-    if (ParserMatch(_Parser, TOKEN_IF)) return ParseIfStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_WHILE)) return ParseWhileStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_REPEAT)) return ParseRepeatStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_FOR)) return ParseForStatement(_Parser);
-    if (ParserMatch(_Parser, TOKEN_RETURN)) return ParseReturnStatement(_Parser);
+    if (ParserMatch(_Parser, TOKEN_IF)) {
+        TraceToken("Matched IF", _Parser);
+        TraceExit("ParseStatement", _Parser);
+
+        return ParseIfStatement(_Parser);
+    }
+
+    if (ParserMatch(_Parser, TOKEN_WHILE)) {
+        TraceToken("Matched WHILE", _Parser);
+        TraceExit("ParseStatement", _Parser);
+
+        return ParseWhileStatement(_Parser);
+    }
+
+    if (ParserMatch(_Parser, TOKEN_REPEAT)) {
+        TraceToken("Matched REPEAT", _Parser);
+        TraceExit("ParseStatement", _Parser);
+
+        return ParseRepeatStatement(_Parser);
+    }
+
+    if (ParserMatch(_Parser, TOKEN_FOR)) {
+        TraceToken("Matched FOR", _Parser);
+        TraceExit("ParseStatement", _Parser);
+    
+        return ParseForStatement(_Parser);
+    }
+
+    if (ParserMatch(_Parser, TOKEN_RETURN)) {
+        TraceToken("Matched RETURN", _Parser);
+        TraceExit("ParseStatement", _Parser);
+
+        return ParseReturnStatement(_Parser);
+    }
+
+    TraceToken("Falling through to expression statement", _Parser);
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
 
@@ -216,10 +289,14 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
 
     if (_Parser -> HasError) {
+        TraceExit("ParseStatement", _Parser);
+
         free(Statement);
 
         return NULL;
     }
+
+    TraceExit("ParseStatement", _Parser);
 
     return Statement;
 }
@@ -229,7 +306,16 @@ ASTStatement *ParseBlock(Parser *_Parser) {
 
     Block -> Kind = STMT_BLOCK;
 
-    ParserMatch(_Parser, TOKEN_BEGIN);
+    TraceEnter("ParseBlock", _Parser);
+
+    if (!ParserMatch(_Parser, TOKEN_BEGIN)) {
+        ParserError(_Parser, "expected 'begin' to start block");
+        TraceToken("FAILED to match BEGIN", _Parser);
+
+        return Block;
+    } else {
+        TraceToken("Matched BEGIN", _Parser);
+    }
     
     while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_EOF)) {
         if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
@@ -249,18 +335,24 @@ ASTStatement *ParseBlock(Parser *_Parser) {
     }
 
     ParserMatch(_Parser, TOKEN_END);
+    TraceToken("Matched END", _Parser);
+
     ParserMatch(_Parser, TOKEN_IDENTIFIER);
+    TraceToken("Matched end identifier", _Parser);
+
+    TraceExit("ParseBlock", _Parser);
 
     return Block;
 }
 
 ASTStatement *ParseVariableDeclaration(Parser *_Parser, int Mutability) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
-    Token *Previous = ParserPrevious(_Parser);
 
     Variable -> Kind = STMT_VAR_DECL;
 
     if (Mutability) {
+        Token *Previous = ParserPrevious(_Parser);
+
         Variable -> VarDecl.Mutable = (Previous -> Type == TOKEN_MUTABLE);
     } else {
         Variable -> VarDecl.Mutable = 0;
@@ -389,20 +481,26 @@ ASTStatement *ParseReturnStatement(Parser *_Parser) {
 }
 
 ASTExpression *ParseExpression(Parser *_Parser) {
+    TraceEnter("ParseExpression", _Parser);
+    TraceExit("ParseExpression", _Parser);
+
     return ParseBinary(_Parser, 0);
 }
 
 ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
     ASTExpression *Left = ParseUnary(_Parser);
 
+    TraceEnter("ParseBinary", _Parser);
+
     while (1) {
         Token *OperatorToken = ParserPeek(_Parser);
 
         int OperatorPrecedence = GetOperatorPrecedence(OperatorToken -> Type);
-        if (OperatorPrecedence < Precedence)
+        if (OperatorPrecedence <= 0 || OperatorPrecedence < Precedence)
             break;
 
         ParserAdvance(_Parser);
+        TraceToken("Binary operator", _Parser);
 
         ASTExpression *Right = ParseBinary(_Parser, OperatorPrecedence + 1);
 
@@ -415,19 +513,28 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
         Left = BinaryExpression;
     }
 
+    TraceExit("ParseBinary", _Parser);
+
     return Left;
 }
 
 ASTExpression *ParseUnary(Parser *_Parser) {
+    TraceEnter("ParseUnary", _Parser);
+    
     if (ParserMatch(_Parser, TOKEN_MINUS) || ParserMatch(_Parser, TOKEN_NOT)) {
         ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
 
         Expression -> Kind = EXPR_UNARY;
         Expression -> Unary.Op = ParserPrevious(_Parser) -> Type;
         Expression -> Unary.Operand = ParseUnary(_Parser);
+        
+        TraceToken("Matched unary operator", _Parser);
+        TraceExit("ParseUnary", _Parser);
 
         return Expression;
     }
+
+    TraceExit("ParseUnary", _Parser);
 
     return ParsePostfix(_Parser);
 }
@@ -435,34 +542,54 @@ ASTExpression *ParseUnary(Parser *_Parser) {
 ASTExpression *ParsePrimary(Parser *_Parser) {
     ASTExpression *Expression = calloc(1, sizeof(ASTExpression));
 
+    TraceEnter("ParsePrimary", _Parser);
+
     if (ParserMatch(_Parser, TOKEN_NUMBER)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Number = ParserPrevious(_Parser) -> Literal.Number;
+
+        TraceToken("Matched NUMBER", _Parser);
+        TraceExit("ParsePrimary", _Parser);
 
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_INTEGER)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Int = ParserPrevious(_Parser) -> Literal.Int;
 
+        TraceToken("Matched INTEGER", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_STRING_LITERAL)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.String = ParserPrevious(_Parser) -> Literal.String;
+
+        TraceToken("Matched STRING_LITERAL", _Parser);
+        TraceExit("ParsePrimary", _Parser);
 
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_CHAR_LITERAL)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Char = (char) ParserPrevious(_Parser) -> Literal.Int;
 
+        TraceToken("Matched CHAR_LITERAL", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_TRUE)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Bool = 1;
 
+        TraceToken("Matched TRUE", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_FALSE)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Bool = 0;
+
+        TraceToken("Matched FALSE", _Parser);
+        TraceExit("ParsePrimary", _Parser);
 
         return Expression;
     }
@@ -471,28 +598,43 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
         Expression -> Kind = EXPR_IDENTIFIER;
         Expression -> Identifier = ParserPrevious(_Parser) -> Start;
 
+        TraceToken("Matched IDENTIFIER", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
         return Expression;
     }
 
     if (ParserMatch(_Parser, TOKEN_LPAREN)) {
+        TraceToken("Matched LPAREN", _Parser);
+
         free(Expression);
 
         Expression = ParseExpression(_Parser);
 
         ParserMatch(_Parser, TOKEN_RPAREN);
 
+        TraceToken("Matched RPAREN", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
         return Expression;
     }
 
     if (ParserCheck(_Parser, TOKEN_LBRACKET)) {
+        TraceToken("Detected LBRACKET", _Parser);
+
         free(Expression);
+
+        TraceExit("ParsePrimary", _Parser);
 
         return ParseArrayLiteral(_Parser);
     }
 
+    TraceToken("ERROR - No valid primary expression", _Parser);
     ParserError(_Parser, "invalid expression");
 
     Expression -> Kind = EXPR_LITERAL;
+
+    TraceExit("ParsePrimary", _Parser);
 
     return Expression;
 }
@@ -522,9 +664,6 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
         ArrayLiteral -> Array.Elements = realloc(ArrayLiteral -> Array.Elements, sizeof(ASTExpression *) * (ArrayLiteral -> Array.Count + 1));
         ArrayLiteral -> Array.Elements[ArrayLiteral -> Array.Count++] = Element;
 
-        //if (ParserMatch(_Parser, TOKEN_COMMA))
-        //    continue;
-
         ParserMatch(_Parser, TOKEN_COMMA);
     }
 
@@ -538,6 +677,8 @@ ASTExpression *ParseArrayLiteral(Parser *_Parser) {
 ASTExpression *ParsePostfix(Parser *_Parser) {
     ASTExpression *Expression = ParsePrimary(_Parser);
 
+    TraceEnter("ParsePostfix", _Parser);
+
     while (1) {
         if (ParserMatch(_Parser, TOKEN_LPAREN)) {
             ASTExpression *Call = calloc(1, sizeof(ASTExpression));
@@ -546,6 +687,8 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
             Call -> Call.Callee = Expression;
             Call -> Call.Args = NULL;
             Call -> Call.ArgCount = 0;
+
+            TraceToken("Matched LPAREN for call", _Parser);
 
             if (!ParserCheck(_Parser, TOKEN_RPAREN)) {
                 do {
@@ -557,6 +700,7 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
             }
     
             ParserMatch(_Parser, TOKEN_RPAREN);
+            TraceToken("Matched RPAREN for call", _Parser);
 
             Expression = Call;
         }
@@ -565,8 +709,11 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
             ASTExpression *Index = calloc(1, sizeof(ASTExpression));
             ASTExpression *IndexExpr = ParseExpression(_Parser);
 
+            TraceToken("Matched LBRACKET for index", _Parser);
+
             if (!ParserMatch(_Parser, TOKEN_RBRACKET)) {
                 ParserError(_Parser, "expected ']' after index expression");
+                TraceExit("ParsePostfix", _Parser);
 
                 return Expression;
             }
@@ -577,11 +724,15 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
 
             Expression = Index;
 
+            TraceToken("Matched RBRACKET for index", _Parser);
+
             continue;
         }
         
         break;
     }
+
+    TraceExit("ParsePostfix", _Parser);
 
     return Expression;
 }
@@ -655,7 +806,7 @@ void ParserError(Parser *_Parser, const char *Message) {
     int Line = _Parser -> Current -> Line;
     int Column  = _Parser -> Current -> Column;
 
-    if (Line == PreviousLine && Column == PreviousColumn) {
+    if (Line == PreviousLine && Column == PreviousColumn || ParserCheck(_Parser, TOKEN_EOF)) {
         exit(0);
     }
 
@@ -669,4 +820,38 @@ void ParserError(Parser *_Parser, const char *Message) {
     while (!IsSyncToken(_Parser -> Current -> Type)) {
         ParserAdvance(_Parser);
     }
+}
+
+static void TraceEnter(const char *FunctionName, Parser *_Parser) {
+    #if PARSER_TRACE
+        TraceStack[TraceDepth].FunctionName = FunctionName;
+        TraceStack[TraceDepth].Depth = TraceDepth;
+        
+        for (int i = 0; i < TraceDepth; i++)
+            printf("  ");
+
+        printf(">> %s (current: %s at %d:%d)\n", FunctionName, TokenTypeToString(_Parser -> Current -> Type), _Parser -> Current -> Line, _Parser -> Current -> Column);
+        
+        TraceDepth++;
+    #endif
+}
+
+static void TraceExit(const char *FunctionName, Parser *_Parser) {
+    #if PARSER_TRACE
+        TraceDepth--;
+        
+        for (int i = 0; i < TraceDepth; i++)
+            printf("  ");
+
+        printf("<< %s (current: %s at %d:%d)\n", FunctionName, TokenTypeToString(_Parser -> Current -> Type), _Parser -> Current -> Line, _Parser -> Current -> Column);
+    #endif
+}
+
+static void TraceToken(const char *Action, Parser *_Parser) {
+    #if PARSER_TRACE
+        for (int i = 0; i < TraceDepth; i++)
+            printf("  ");
+
+        printf("  [%s: %s at %d:%d]\n", Action, TokenTypeToString(_Parser -> Current -> Type), _Parser -> Current -> Line, _Parser -> Current -> Column);
+    #endif
 }
