@@ -9,6 +9,29 @@ typedef enum {
     SYMBOL_SUBPROGRAM
 } SymbolKind;
 
+typedef enum {
+    SEM_ERROR,
+    SEM_WARNING,
+    SEM_NOTE
+} SemanticSeverity;
+
+typedef struct {
+    SemanticSeverity Severity;
+    
+    const char *Message;
+    const char *Detail;
+
+    unsigned Line;
+    unsigned Column;
+} SemanticError;
+
+typedef struct {
+    SemanticError *Errors;
+
+    int Count;
+    int HadFatal;
+} SemanticContext;
+
 typedef struct Symbol {
     const char *Name;
 
