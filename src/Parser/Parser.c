@@ -190,18 +190,18 @@ ASTStatement *ParseStatement(Parser *_Parser) {
     }
 
     if (ParserMatch(_Parser, TOKEN_MUTABLE) || ParserMatch(_Parser, TOKEN_CONSTANT)) {
-        return ParseVariableDeclaration(_Parser);
+        return ParseVariableDeclaration(_Parser, 1);
     }
 
     if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_COLON)) {
-        return ParseVariableDeclaration(_Parser);
+        return ParseVariableDeclaration(_Parser, 0);
     }
 
-    //if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
-    //    ParserError(_Parser, "subprograms are only allowed at block level");
+    if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+        ParserError(_Parser, "subprograms are only allowed at block level");
 
-    //    return NULL;
-    //}
+        return NULL;
+    }
 
     if (ParserMatch(_Parser, TOKEN_BEGIN)) return ParseBlock(_Parser);
     if (ParserMatch(_Parser, TOKEN_IF)) return ParseIfStatement(_Parser);
@@ -212,6 +212,7 @@ ASTStatement *ParseStatement(Parser *_Parser) {
 
     ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
 
+    Statement -> Kind = STMT_CALL;
     Statement -> ExpressionStmt.Expression = ParseExpression(_Parser);
 
     if (_Parser -> HasError) {
@@ -253,12 +254,17 @@ ASTStatement *ParseBlock(Parser *_Parser) {
     return Block;
 }
 
-ASTStatement *ParseVariableDeclaration(Parser *_Parser) {
+ASTStatement *ParseVariableDeclaration(Parser *_Parser, int Mutability) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
     Token *Previous = ParserPrevious(_Parser);
 
     Variable -> Kind = STMT_VAR_DECL;
-    Variable -> VarDecl.Mutable = (Previous -> Type == TOKEN_MUTABLE);
+
+    if (Mutability) {
+        Variable -> VarDecl.Mutable = (Previous -> Type == TOKEN_MUTABLE);
+    } else {
+        Variable -> VarDecl.Mutable = 0;
+    }
 
     if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
         ParserError(_Parser, "expected variable name");
@@ -398,9 +404,10 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
 
         ParserAdvance(_Parser);
 
-        ASTExpression *Right = ParseBinary(_Parser, Precedence + 1);
+        ASTExpression *Right = ParseBinary(_Parser, OperatorPrecedence + 1);
 
         ASTExpression *BinaryExpression = calloc(1, sizeof(ASTExpression));
+        BinaryExpression -> Kind = EXPR_BINARY;
         BinaryExpression -> Binary.Left = Left;
         BinaryExpression -> Binary.Right = Right;
         BinaryExpression -> Binary.Op = TokenToOperator(OperatorToken -> Type);
@@ -484,6 +491,8 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     }
 
     ParserError(_Parser, "invalid expression");
+
+    Expression -> Kind = EXPR_LITERAL;
 
     return Expression;
 }

@@ -22,7 +22,7 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser);
 
 ASTStatement *ParseStatement(Parser *_Parser);
 ASTStatement *ParseBlock(Parser *_Parser);
-ASTStatement *ParseVariableDeclaration(Parser *_Parser);
+ASTStatement *ParseVariableDeclaration(Parser *_Parser, int Mutability);
 
 ASTStatement *ParseIfStatement(Parser *_Parser);
 ASTStatement *ParseWhileStatement(Parser *_Parser);

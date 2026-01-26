@@ -36,6 +36,7 @@ typedef enum {
     TOKEN_THEN,
     TOKEN_UNTIL,
     TOKEN_DO,
+    TOKEN_IN,
     TOKEN_AND,
     TOKEN_OR,
     TOKEN_NOT,
