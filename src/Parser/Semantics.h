@@ -6,31 +6,10 @@
 typedef enum {
     SYMBOL_VAR,
     SYMBOL_PARAM,
-    SYMBOL_SUBPROGRAM
+    SYMBOL_FUNCTION,
+    SYMBOL_METHOD,
+    SYMBOL_PROCEDURE
 } SymbolKind;
-
-typedef enum {
-    SEM_ERROR,
-    SEM_WARNING,
-    SEM_NOTE
-} SemanticSeverity;
-
-typedef struct {
-    SemanticSeverity Severity;
-    
-    const char *Message;
-    const char *Detail;
-
-    unsigned Line;
-    unsigned Column;
-} SemanticError;
-
-typedef struct {
-    SemanticError *Errors;
-
-    int Count;
-    int HadFatal;
-} SemanticContext;
 
 typedef struct Symbol {
     const char *Name;
@@ -40,24 +19,50 @@ typedef struct Symbol {
     
     int Mutable;
 
-    ASTSubprogram *Subprogram;
+    int ScopeDepth;
+    struct Symbol *Next;
 } Symbol;
 
 typedef struct Scope {
     struct Scope *Parent;
-
-    Symbol **Symbols;
-    int Count;
+    
+    Symbol *Symbols;
+    int Depth;
 } Scope;
 
-void AnalyzeProgram(ASTProgram *Program);
-void AnalyzeSubprogram(Scope *Global, ASTSubprogram *Function);
+typedef struct SemanticAnalyzer {
+    Scope *CurrentScope;
+    int ScopeDepth;
 
-void AnalyzeStatement(Scope *_Scope, ASTStatement *Statement);
-ASTType *AnalyzeExpression(Scope *_Scope, ASTExpression *Expression);
+    int HasError;
+    int ErrorCount;
+    
+    ASTSubprogram *CurrentFunction;
+    int InLoop;
+} SemanticAnalyzer;
 
-Scope *CreateScope(Scope *Parent);
-void AddSymbol(Scope *_Scope, Symbol *_Symbol);
-Symbol *FindSymbol(Scope *_Scope, const char *Name);
+SemanticAnalyzer *CreateSemanticAnalyzer(void);
+void DestroySemanticAnalyzer(SemanticAnalyzer *Analyzer);
+
+int AnalyzeProgram(SemanticAnalyzer *Analyzer, ASTProgram *Program);
+void AnalyzeSubprogram(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram);
+
+void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement);
+void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression);
+void AnalyzeType(SemanticAnalyzer *Analyzer, ASTType *Type);
+
+void EnterScope(SemanticAnalyzer *Analyzer);
+void ExitScope(SemanticAnalyzer *Analyzer);
+
+Symbol *DeclareSymbol(SemanticAnalyzer *Analyzer, SymbolKind Kind, const char *Name, ASTType *Type, int Mutable);
+Symbol *LookupSymbol(SemanticAnalyzer *Analyzer, const char *Name);
+Symbol *LookupSymbolInCurrentScope(SemanticAnalyzer *Analyzer, const char *Name);
+
+int TypesEqual(ASTType *A, ASTType *B);
+const char *TypeToString(ASTType *Type);
+ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expr);
+
+void SemanticError(SemanticAnalyzer *Analyzer, const char *Message);
+void SemanticWarning(SemanticAnalyzer *Analyzer, const char *Message);
 
 #endif
