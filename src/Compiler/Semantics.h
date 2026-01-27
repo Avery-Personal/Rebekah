@@ -1,7 +1,7 @@
 #ifndef SEMANTICS_H
 #define SEMANTICS_H
 
-#include "Parser.h"
+#include "../Parser/Parser.h"
 
 typedef enum {
     SYMBOL_VAR,

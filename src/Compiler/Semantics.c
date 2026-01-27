@@ -1,0 +1,677 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "Semantics.h"
+
+static int StringsEqual(const char *A, size_t LenA, const char *B, size_t LenB) {
+    if (A == NULL || B == NULL) return A == B;
+    if (LenA != LenB) return 0;
+    
+    return memcmp(A, B, LenA) == 0;
+}
+
+static size_t GetTokenLength(const char *String) {
+    if (String == NULL) return 0;
+    
+    size_t Len = 0;
+    while (String[Len] != '\0' && 
+           String[Len] != ' ' && 
+           String[Len] != '\t' && 
+           String[Len] != '\n' && 
+           String[Len] != '\r' &&
+           String[Len] != '(' &&
+           String[Len] != ')' &&
+           String[Len] != '[' &&
+           String[Len] != ']' &&
+           String[Len] != ',' &&
+           String[Len] != ':' &&
+           String[Len] != ';') {
+        Len++;
+    }
+    
+    return Len;
+}
+
+SemanticAnalyzer *CreateSemanticAnalyzer(void) {
+    SemanticAnalyzer *Analyzer = calloc(1, sizeof(SemanticAnalyzer));
+    
+    Analyzer -> CurrentScope = NULL;
+    Analyzer -> ScopeDepth = 0;
+    Analyzer -> HasError = 0;
+    Analyzer -> ErrorCount = 0;
+    Analyzer -> CurrentFunction = NULL;
+    Analyzer -> InLoop = 0;
+    
+    EnterScope(Analyzer);
+    
+    return Analyzer;
+}
+
+void DestroySemanticAnalyzer(SemanticAnalyzer *Analyzer) {
+    while (Analyzer -> CurrentScope != NULL) {
+        ExitScope(Analyzer);
+    }
+    
+    free(Analyzer);
+}
+
+void EnterScope(SemanticAnalyzer *Analyzer) {
+    Scope *NewScope = calloc(1, sizeof(Scope));
+    
+    NewScope -> Symbols = NULL;
+    NewScope -> Parent = Analyzer -> CurrentScope;
+    NewScope -> Depth = Analyzer -> ScopeDepth++;
+    
+    Analyzer -> CurrentScope = NewScope;
+}
+
+void ExitScope(SemanticAnalyzer *Analyzer) {
+    if (Analyzer -> CurrentScope == NULL) return;
+    
+    Scope *OldScope = Analyzer -> CurrentScope;
+
+    Analyzer -> CurrentScope = OldScope -> Parent;
+    Analyzer -> ScopeDepth--;
+    
+    Symbol *Current = OldScope -> Symbols;
+
+    while (Current != NULL) {
+        Symbol *Next = Current -> Next;
+
+        free(Current);
+
+        Current = Next;
+    }
+    
+    free(OldScope);
+}
+
+Symbol *DeclareSymbol(SemanticAnalyzer *Analyzer, SymbolKind Kind, const char *Name, ASTType *Type, int Mutable) {
+    Symbol *Existing = LookupSymbolInCurrentScope(Analyzer, Name);
+
+    if (Existing != NULL) {
+        char ErrorMsg[256];
+
+        snprintf(ErrorMsg, sizeof(ErrorMsg), "symbol '%.*s' is already declared in this scope", (int)(strchr(Name, '\0') - Name > 50 ? 50 : strchr(Name, '\0') - Name), Name);
+        SemanticError(Analyzer, ErrorMsg);
+
+        return NULL;
+    }
+    
+    Symbol *NewSymbol = calloc(1, sizeof(Symbol));
+
+    NewSymbol -> Kind = Kind;
+    NewSymbol -> Name = Name;
+    NewSymbol -> Type = Type;
+    NewSymbol -> Mutable = Mutable;
+    NewSymbol -> ScopeDepth = Analyzer -> CurrentScope -> Depth;
+    NewSymbol -> Next = Analyzer -> CurrentScope -> Symbols;
+    
+    Analyzer -> CurrentScope -> Symbols = NewSymbol;
+    
+    return NewSymbol;
+}
+
+Symbol *LookupSymbol(SemanticAnalyzer *Analyzer, const char *Name) {
+    Scope *CurrentScope = Analyzer -> CurrentScope;
+
+    size_t NameLen = GetTokenLength(Name);
+    
+    while (CurrentScope != NULL) {
+        Symbol *Current = CurrentScope -> Symbols;
+
+        while (Current != NULL) {
+            size_t CurrentLen = GetTokenLength(Current -> Name);
+
+            if (StringsEqual(Current -> Name, CurrentLen, Name, NameLen)) {
+                return Current;
+            }
+
+            Current = Current -> Next;
+        }
+
+        CurrentScope = CurrentScope -> Parent;
+    }
+    
+    return NULL;
+}
+
+Symbol *LookupSymbolInCurrentScope(SemanticAnalyzer *Analyzer, const char *Name) {
+    if (Analyzer -> CurrentScope == NULL) return NULL;
+    
+    Symbol *Current = Analyzer -> CurrentScope -> Symbols;
+
+    size_t NameLen = GetTokenLength(Name);
+
+    while (Current != NULL) {
+        size_t CurrentLen = GetTokenLength(Current -> Name);
+
+        if (StringsEqual(Current -> Name, CurrentLen, Name, NameLen)) {
+            return Current;
+        }
+
+        Current = Current -> Next;
+    }
+    
+    return NULL;
+}
+
+int TypesEqual(ASTType *A, ASTType *B) {
+    if (A == NULL || B == NULL) return A == B;
+    if (A -> Kind != B -> Kind) return 0;
+    
+    switch (A -> Kind) {
+        case TYPE_ARRAY:
+            return TypesEqual(A -> ElementType, B -> ElementType);
+            
+        default:
+            if (A -> Name == NULL || B -> Name == NULL) return A -> Name == B -> Name;
+
+            size_t LenA = GetTokenLength(A -> Name);
+            size_t LenB = GetTokenLength(B -> Name);
+
+            return StringsEqual(A -> Name, LenA, B -> Name, LenB);
+    }
+}
+
+const char *TypeToString(ASTType *Type) {
+    if (Type == NULL) return "void";
+    
+    static char Buffer[256];
+    
+    switch (Type -> Kind) {
+        case TYPE_ARRAY:
+            snprintf(Buffer, sizeof(Buffer), "Array<%s>", TypeToString(Type -> ElementType));
+
+            return Buffer;
+            
+        default:
+            if (Type -> Name) {
+                snprintf(Buffer, sizeof(Buffer), "%.*s", (int)(strchr(Type -> Name, '\0') - Type -> Name > 50 ? 50 : strchr(Type -> Name, '\0') - Type -> Name), Type -> Name);
+
+                return Buffer;
+            }
+
+            return "Unknown";
+    }
+}
+
+ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression) {
+    if (Expression == NULL) return NULL;
+    
+    switch (Expression -> Kind) {
+        case EXPR_LITERAL: {
+            ASTType *Type = calloc(1, sizeof(ASTType));
+
+            Type -> Name = "Integer";
+            
+            return Type;
+        }
+        
+        case EXPR_IDENTIFIER: {
+            Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Identifier);
+            if (_Symbol == NULL) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)(strchr(Expression -> Identifier, '\0') - Expression -> Identifier > 50 ? 50 : strchr(Expression -> Identifier, '\0') - Expression -> Identifier), Expression -> Identifier);
+                SemanticError(Analyzer, ErrorMsg);
+
+                return NULL;
+            }
+
+            return _Symbol -> Type;
+        }
+        
+        case EXPR_BINARY: {
+            ASTType *LeftType = GetExpressionType(Analyzer, Expression -> Binary.Left);
+            ASTType *RightType = GetExpressionType(Analyzer, Expression -> Binary.Right);
+            
+            if (LeftType == NULL || RightType == NULL) return NULL;
+            if (!TypesEqual(LeftType, RightType)) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in binary operation: '%s' and '%s'", TypeToString(LeftType), TypeToString(RightType));
+                SemanticError(Analyzer, ErrorMsg);
+            }
+            
+            return LeftType;
+        }
+        
+        case EXPR_UNARY: {
+            return GetExpressionType(Analyzer, Expression -> Unary.Operand);
+        }
+        
+        case EXPR_CALL: {
+            if (Expression -> Call.Callee -> Kind != EXPR_IDENTIFIER) {
+                SemanticError(Analyzer, "can only call functions by name");
+
+                return NULL;
+            }
+            
+            Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Call.Callee -> Identifier);
+            if (_Symbol == NULL) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined function '%.*s'", (int)(strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier > 50 ? 50 : strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier), Expression -> Call.Callee -> Identifier);
+                SemanticError(Analyzer, ErrorMsg);
+
+                return NULL;
+            }
+            
+            if (_Symbol -> Kind != SYMBOL_FUNCTION && _Symbol -> Kind != SYMBOL_METHOD && _Symbol -> Kind != SYMBOL_PROCEDURE) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "'%.*s' is not a function", (int)(strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier > 50 ? 50 : strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier), Expression -> Call.Callee -> Identifier);
+                SemanticError(Analyzer, ErrorMsg);
+
+                return NULL;
+            }
+            
+            return _Symbol -> Type;
+        }
+        
+        case EXPR_INDEX: {
+            ASTType *TargetType = GetExpressionType(Analyzer, Expression -> Index.Target);
+            if (TargetType == NULL) return NULL;
+
+            if (TargetType -> Kind != TYPE_ARRAY) {
+                SemanticError(Analyzer, "cannot index non-array type");
+                return NULL;
+            }
+            
+            return TargetType -> ElementType;
+        }
+        
+        case EXPR_ARRAY_LITERAL: {
+            if (Expression -> Array.Count == 0) {
+                SemanticError(Analyzer, "cannot infer type of empty array literal");
+                
+                return NULL;
+            }
+            
+            ASTType *ElementType = GetExpressionType(Analyzer, Expression -> Array.Elements[0]);
+            
+            for (size_t i = 1; i < Expression -> Array.Count; i++) {
+                ASTType *Type = GetExpressionType(Analyzer, Expression -> Array.Elements[i]);
+                if (!TypesEqual(ElementType, Type)) {
+                    SemanticError(Analyzer, "array literal elements must all have the same type");
+                }
+            }
+            
+            ASTType *ArrayType = calloc(1, sizeof(ASTType));
+
+            ArrayType -> Kind = TYPE_ARRAY;
+            ArrayType -> ElementType = ElementType;
+
+            return ArrayType;
+        }
+        
+        default:
+            return NULL;
+    }
+}
+
+void AnalyzeType(SemanticAnalyzer *Analyzer, ASTType *Type) {
+    if (Type == NULL) return;
+    
+    switch (Type -> Kind) {
+        case TYPE_ARRAY:
+            AnalyzeType(Analyzer, Type -> ElementType);
+
+            break;
+            
+        default:
+            break;
+    }
+}
+
+void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression) {
+    if (Expression == NULL) return;
+    
+    switch (Expression -> Kind) {
+        case EXPR_LITERAL:
+            break;
+            
+        case EXPR_IDENTIFIER: {
+            Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Identifier);
+            if (_Symbol == NULL) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)(strchr(Expression -> Identifier, '\0') - Expression -> Identifier > 50 ? 50 : strchr(Expression -> Identifier, '\0') - Expression -> Identifier), Expression -> Identifier);
+                SemanticError(Analyzer, ErrorMsg);
+            }
+
+            break;
+        }
+        
+        case EXPR_BINARY:
+            AnalyzeExpression(Analyzer, Expression -> Binary.Left);
+            AnalyzeExpression(Analyzer, Expression -> Binary.Right);
+            
+            GetExpressionType(Analyzer, Expression);
+
+            break;
+            
+        case EXPR_UNARY:
+            AnalyzeExpression(Analyzer, Expression -> Unary.Operand);
+            
+            break;
+            
+        case EXPR_CALL: {
+            AnalyzeExpression(Analyzer, Expression -> Call.Callee);
+            
+            for (size_t i = 0; i < Expression -> Call.ArgCount; i++) {
+                AnalyzeExpression(Analyzer, Expression -> Call.Args[i]);
+            }
+            
+            if (Expression -> Call.Callee -> Kind == EXPR_IDENTIFIER) {
+                Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Call.Callee -> Identifier);
+
+                if (_Symbol != NULL && (_Symbol -> Kind == SYMBOL_FUNCTION || _Symbol -> Kind == SYMBOL_METHOD || _Symbol -> Kind == SYMBOL_PROCEDURE)) {
+                    // Uh this needs sum specific in here, prob do after the compiler
+                }
+            }
+            break;
+        }
+        
+        case EXPR_INDEX:
+            AnalyzeExpression(Analyzer, Expression -> Index.Target);
+            AnalyzeExpression(Analyzer, Expression -> Index.Index);
+            
+            GetExpressionType(Analyzer, Expression);
+
+            break;
+            
+        case EXPR_ARRAY_LITERAL:
+            for (size_t i = 0; i < Expression -> Array.Count; i++) {
+                AnalyzeExpression(Analyzer, Expression -> Array.Elements[i]);
+            }
+            
+            GetExpressionType(Analyzer, Expression);
+            
+            break;
+    }
+}
+
+void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
+    if (Statement == NULL) return;
+    
+    switch (Statement -> Kind) {
+        case STMT_VAR_DECL: {
+            AnalyzeType(Analyzer, Statement -> VarDecl.Type);
+            DeclareSymbol(Analyzer, SYMBOL_VAR, Statement -> VarDecl.Name, Statement -> VarDecl.Type, Statement -> VarDecl.Mutable);
+            
+            if (Statement -> VarDecl.Initializer != NULL) {
+                AnalyzeExpression(Analyzer, Statement -> VarDecl.Initializer);
+                
+                ASTType *InitializerType = GetExpressionType(Analyzer, Statement -> VarDecl.Initializer);
+                if (InitializerType != NULL && !TypesEqual(Statement -> VarDecl.Type, InitializerType)) {
+                    char ErrorMsg[256];
+
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in variable initialization: expected '%s', got '%s'", TypeToString(Statement -> VarDecl.Type), TypeToString(InitializerType));
+                    SemanticError(Analyzer, ErrorMsg);
+                }
+            }
+
+            break;
+        }
+        
+        case STMT_ASSIGN: {
+            AnalyzeExpression(Analyzer, Statement -> Assign.Target);
+            AnalyzeExpression(Analyzer, Statement -> Assign.Value);
+            
+            if (Statement -> Assign.Target -> Kind == EXPR_IDENTIFIER) {
+                Symbol *_Symbol = LookupSymbol(Analyzer, Statement -> Assign.Target -> Identifier);
+                if (_Symbol != NULL && !_Symbol -> Mutable) {
+                    char ErrorMsg[256];
+
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int)(strchr(Statement -> Assign.Target -> Identifier, '\0') - Statement -> Assign.Target -> Identifier > 50 ? 50 : strchr(Statement -> Assign.Target -> Identifier, '\0') - Statement -> Assign.Target -> Identifier), Statement -> Assign.Target -> Identifier);
+                    SemanticError(Analyzer, ErrorMsg);
+                }
+            }
+            
+            ASTType *TargetType = GetExpressionType(Analyzer, Statement -> Assign.Target);
+            ASTType *ValueType = GetExpressionType(Analyzer, Statement -> Assign.Value);
+            
+            if (TargetType != NULL && ValueType != NULL && !TypesEqual(TargetType, ValueType)) {
+                char ErrorMsg[256];
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in assignment: expected '%s', got '%s'", TypeToString(TargetType), TypeToString(ValueType));
+                SemanticError(Analyzer, ErrorMsg);
+            }
+
+            break;
+        }
+        
+        case STMT_IF: {
+            AnalyzeExpression(Analyzer, Statement -> If.Condition);
+            EnterScope(Analyzer);
+
+            for (size_t i = 0; i < Statement -> If.ThenCount; i++) {
+                AnalyzeStatement(Analyzer, Statement -> If.ThenBlock[i]);
+            }
+
+            ExitScope(Analyzer);
+            
+            for (size_t i = 0; i < Statement -> If.ElseIfCount; i++) {
+                AnalyzeExpression(Analyzer, Statement -> If.ElseIfs[i].Condition);
+                EnterScope(Analyzer);
+
+                for (size_t j = 0; j < Statement -> If.ElseIfs[i].Count; j++) {
+                    AnalyzeStatement(Analyzer, Statement -> If.ElseIfs[i].Block[j]);
+                }
+
+                ExitScope(Analyzer);
+            }
+            
+            if (Statement -> If.ElseBlock != NULL) {
+                EnterScope(Analyzer);
+
+                for (size_t i = 0; i < Statement -> If.ElseCount; i++) {
+                    AnalyzeStatement(Analyzer, Statement -> If.ElseBlock[i]);
+                }
+
+                ExitScope(Analyzer);
+            }
+
+            break;
+        }
+        
+        case STMT_WHILE: {
+            AnalyzeExpression(Analyzer, Statement -> While.Condition);
+            
+            int WasInLoop = Analyzer -> InLoop;
+
+            Analyzer -> InLoop = 1;
+            
+            EnterScope(Analyzer);
+
+            for (size_t i = 0; i < Statement -> While.Count; i++)
+                AnalyzeStatement(Analyzer, Statement -> While.Body[i]);
+
+            ExitScope(Analyzer);
+            
+            Analyzer -> InLoop = WasInLoop;
+
+            break;
+        }
+        
+        case STMT_REPEAT: {
+            int WasInLoop = Analyzer -> InLoop;
+
+            Analyzer -> InLoop = 1;
+            
+            EnterScope(Analyzer);
+
+            for (size_t i = 0; i < Statement -> Repeat.Count; i++)
+                AnalyzeStatement(Analyzer, Statement -> Repeat.Body[i]);
+
+            ExitScope(Analyzer);
+            
+            AnalyzeExpression(Analyzer, Statement -> Repeat.Until);
+            
+            Analyzer -> InLoop = WasInLoop;
+
+            break;
+        }
+        
+        case STMT_FOR: {
+            EnterScope(Analyzer);
+            
+            ASTType *IntType = calloc(1, sizeof(ASTType));
+
+            IntType -> Name = "Integer";
+
+            DeclareSymbol(Analyzer, SYMBOL_VAR, Statement -> For.Iterator, IntType, 0);
+            
+            AnalyzeExpression(Analyzer, Statement -> For.Start);
+            AnalyzeExpression(Analyzer, Statement -> For.End);
+            
+            int WasInLoop = Analyzer -> InLoop;
+
+            Analyzer -> InLoop = 1;
+            
+            for (size_t i = 0; i < Statement -> For.Count; i++) {
+                AnalyzeStatement(Analyzer, Statement -> For.Body[i]);
+            }
+            
+            Analyzer -> InLoop = WasInLoop;
+
+            ExitScope(Analyzer);
+
+            break;
+        }
+        
+        case STMT_RETURN: {
+            if (Analyzer -> CurrentFunction == NULL) {
+                SemanticError(Analyzer, "return statement outside of function");
+
+                break;
+            }
+            
+            if (Statement -> Return.Value != NULL) {
+                AnalyzeExpression(Analyzer, Statement -> Return.Value);
+                
+                ASTType *ReturnType = GetExpressionType(Analyzer, Statement -> Return.Value);
+
+                if (Analyzer -> CurrentFunction -> ReturnType != NULL && !TypesEqual(Analyzer -> CurrentFunction -> ReturnType, ReturnType)) {
+                    char ErrorMsg[256];
+
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "return type mismatch: expected '%s', got '%s'", TypeToString(Analyzer -> CurrentFunction -> ReturnType), TypeToString(ReturnType));
+                    SemanticError(Analyzer, ErrorMsg);
+                }
+            } else {
+                if (Analyzer -> CurrentFunction -> ReturnType != NULL) {
+                    SemanticError(Analyzer, "missing return value in function that returns a value");
+                }
+            }
+
+            break;
+        }
+        
+        case STMT_BREAK:
+            if (!Analyzer -> InLoop) {
+                SemanticError(Analyzer, "break statement outside of loop");
+            }
+
+            break;
+            
+        case STMT_CONTINUE:
+            if (!Analyzer -> InLoop) {
+                SemanticError(Analyzer, "continue statement outside of loop");
+            }
+
+            break;
+            
+        case STMT_CALL:
+            AnalyzeExpression(Analyzer, Statement -> ExpressionStmt.Expression);
+
+            break;
+            
+        case STMT_BLOCK:
+            EnterScope(Analyzer);
+            
+            for (int i = 0; i < Statement -> Block.SubprogramCount; i++) {
+                AnalyzeSubprogram(Analyzer, Statement -> Block.Subprograms[i]);
+            }
+            
+            for (size_t i = 0; i < Statement -> Block.Count; i++) {
+                AnalyzeStatement(Analyzer, Statement -> Block.Statements[i]);
+            }
+            
+            ExitScope(Analyzer);
+
+            break;
+    }
+}
+
+void AnalyzeSubprogram(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram) {
+    if (Subprogram == NULL) return;
+    
+    SymbolKind Kind;
+
+    switch (Subprogram -> Kind) {
+        case TOKEN_METHOD: Kind = SYMBOL_METHOD; break;
+        case TOKEN_PROCEDURE: Kind = SYMBOL_PROCEDURE; break;
+        case TOKEN_FUNCTION: Kind = SYMBOL_FUNCTION; break;
+
+        default: Kind = SYMBOL_FUNCTION; break;
+    }
+    
+    DeclareSymbol(Analyzer, Kind, Subprogram -> Name, Subprogram -> ReturnType, 0);
+    
+    EnterScope(Analyzer);
+    
+    for (size_t i = 0; i < Subprogram -> ParamCount; i++) {
+        AnalyzeType(Analyzer, Subprogram -> Params[i].Type);
+        DeclareSymbol(Analyzer, SYMBOL_PARAM, Subprogram -> Params[i].Name, Subprogram -> Params[i].Type, 0);
+    }
+    
+    if (Subprogram -> ReturnType != NULL) {
+        AnalyzeType(Analyzer, Subprogram -> ReturnType);
+    }
+    
+    ASTSubprogram *PreviousFunction = Analyzer -> CurrentFunction;
+
+    Analyzer -> CurrentFunction = Subprogram;
+    
+    for (size_t i = 0; i < Subprogram -> BodyCount; i++) {
+        AnalyzeStatement(Analyzer, Subprogram -> Body[i]);
+    }
+    
+    Analyzer -> CurrentFunction = PreviousFunction;
+    
+    ExitScope(Analyzer);
+}
+
+int AnalyzeProgram(SemanticAnalyzer *Analyzer, ASTProgram *Program) {
+    if (Program == NULL) return 0;
+    
+    for (size_t i = 0; i < Program -> SubprogramCount; i++) {
+        AnalyzeSubprogram(Analyzer, Program -> Subprograms[i]);
+    }
+    
+    for (size_t i = 0; i < Program -> StatementCount; i++) {
+        AnalyzeStatement(Analyzer, Program -> Statements[i]);
+    }
+    
+    if (Analyzer -> ErrorCount > 0) {
+        fprintf(stderr, "\nSemantic analysis failed with %d error(s)\n", Analyzer -> ErrorCount);
+    } else {
+        printf("Semantic analysis completed successfully\n");
+    }
+    
+    return !Analyzer -> HasError;
+}
+
+void SemanticError(SemanticAnalyzer *Analyzer, const char *Message) {
+    fprintf(stderr, "[Semantic Error] %s\n", Message);
+
+    Analyzer -> HasError = 1;
+    Analyzer -> ErrorCount++;
+}
+
+void SemanticWarning(SemanticAnalyzer *Analyzer, const char *Message) {
+    fprintf(stderr, "[Semantic Warning] %s\n", Message);
+}
