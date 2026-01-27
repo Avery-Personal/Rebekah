@@ -44,6 +44,12 @@ SemanticAnalyzer *CreateSemanticAnalyzer(void) {
     Analyzer -> InLoop = 0;
     
     EnterScope(Analyzer);
+
+    ASTType *VoidType = calloc(1, sizeof(ASTType));
+
+    VoidType -> Name = "void";
+
+    DeclareSymbol(Analyzer, SYMBOL_FUNCTION, "output", VoidType, 0);
     
     return Analyzer;
 }
@@ -89,11 +95,12 @@ void ExitScope(SemanticAnalyzer *Analyzer) {
 
 Symbol *DeclareSymbol(SemanticAnalyzer *Analyzer, SymbolKind Kind, const char *Name, ASTType *Type, int Mutable) {
     Symbol *Existing = LookupSymbolInCurrentScope(Analyzer, Name);
-
     if (Existing != NULL) {
         char ErrorMsg[256];
 
-        snprintf(ErrorMsg, sizeof(ErrorMsg), "symbol '%.*s' is already declared in this scope", (int)(strchr(Name, '\0') - Name > 50 ? 50 : strchr(Name, '\0') - Name), Name);
+        size_t NameLen = GetTokenLength(Name);
+
+        snprintf(ErrorMsg, sizeof(ErrorMsg), "symbol '%.*s' is already declared in this scope", (int)NameLen, Name);
         SemanticError(Analyzer, ErrorMsg);
 
         return NULL;
@@ -182,13 +189,19 @@ const char *TypeToString(ASTType *Type) {
     
     switch (Type -> Kind) {
         case TYPE_ARRAY:
-            snprintf(Buffer, sizeof(Buffer), "Array<%s>", TypeToString(Type -> ElementType));
+            const char *ElementString = TypeToString(Type -> ElementType);
+            char TempBuffer[256];
+
+            snprintf(TempBuffer, sizeof(TempBuffer), "%s", ElementString);
+            snprintf(Buffer, sizeof(Buffer), "Array<%s>", ElementString);
 
             return Buffer;
             
         default:
             if (Type -> Name) {
-                snprintf(Buffer, sizeof(Buffer), "%.*s", (int)(strchr(Type -> Name, '\0') - Type -> Name > 50 ? 50 : strchr(Type -> Name, '\0') - Type -> Name), Type -> Name);
+                size_t NameLen = GetTokenLength(Type -> Name);
+
+                snprintf(Buffer, sizeof(Buffer), "%.*s", (int)NameLen, Type -> Name);
 
                 return Buffer;
             }
@@ -214,7 +227,9 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
             if (_Symbol == NULL) {
                 char ErrorMsg[256];
 
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)(strchr(Expression -> Identifier, '\0') - Expression -> Identifier > 50 ? 50 : strchr(Expression -> Identifier, '\0') - Expression -> Identifier), Expression -> Identifier);
+                size_t NameLen = GetTokenLength(Expression -> Identifier);
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)NameLen, Expression -> Identifier);
                 SemanticError(Analyzer, ErrorMsg);
 
                 return NULL;
@@ -253,7 +268,9 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
             if (_Symbol == NULL) {
                 char ErrorMsg[256];
 
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined function '%.*s'", (int)(strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier > 50 ? 50 : strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier), Expression -> Call.Callee -> Identifier);
+                size_t NameLen = GetTokenLength(Expression -> Call.Callee -> Identifier);
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined function '%.*s'", (int)NameLen, Expression -> Call.Callee -> Identifier);
                 SemanticError(Analyzer, ErrorMsg);
 
                 return NULL;
@@ -262,7 +279,9 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
             if (_Symbol -> Kind != SYMBOL_FUNCTION && _Symbol -> Kind != SYMBOL_METHOD && _Symbol -> Kind != SYMBOL_PROCEDURE) {
                 char ErrorMsg[256];
 
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "'%.*s' is not a function", (int)(strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier > 50 ? 50 : strchr(Expression -> Call.Callee -> Identifier, '\0') - Expression -> Call.Callee -> Identifier), Expression -> Call.Callee -> Identifier);
+                size_t NameLen = GetTokenLength(Expression -> Call.Callee -> Identifier);
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "'%.*s' is not a function", (int)NameLen, Expression -> Call.Callee -> Identifier);
                 SemanticError(Analyzer, ErrorMsg);
 
                 return NULL;
@@ -338,7 +357,9 @@ void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression) {
             if (_Symbol == NULL) {
                 char ErrorMsg[256];
 
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)(strchr(Expression -> Identifier, '\0') - Expression -> Identifier > 50 ? 50 : strchr(Expression -> Identifier, '\0') - Expression -> Identifier), Expression -> Identifier);
+                size_t NameLen = GetTokenLength(Expression -> Identifier);
+
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)NameLen, Expression -> Identifier);
                 SemanticError(Analyzer, ErrorMsg);
             }
 
@@ -426,7 +447,9 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 if (_Symbol != NULL && !_Symbol -> Mutable) {
                     char ErrorMsg[256];
 
-                    snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int)(strchr(Statement -> Assign.Target -> Identifier, '\0') - Statement -> Assign.Target -> Identifier > 50 ? 50 : strchr(Statement -> Assign.Target -> Identifier, '\0') - Statement -> Assign.Target -> Identifier), Statement -> Assign.Target -> Identifier);
+                    size_t NameLen = GetTokenLength(Statement->Assign.Target->Identifier);
+
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int)NameLen, Statement -> Assign.Target -> Identifier);
                     SemanticError(Analyzer, ErrorMsg);
                 }
             }
@@ -593,9 +616,47 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
             EnterScope(Analyzer);
             
             for (int i = 0; i < Statement -> Block.SubprogramCount; i++) {
-                AnalyzeSubprogram(Analyzer, Statement -> Block.Subprograms[i]);
+                ASTSubprogram *Subprogram = Statement -> Block.Subprograms[i];
+                SymbolKind Kind;
+
+                switch (Subprogram -> Kind) {
+                    case TOKEN_METHOD: Kind = SYMBOL_METHOD; break;
+                    case TOKEN_PROCEDURE: Kind = SYMBOL_PROCEDURE; break;
+                    case TOKEN_FUNCTION: Kind = SYMBOL_FUNCTION; break;
+
+                    default: Kind = SYMBOL_FUNCTION; break;
+                }
+                
+                DeclareSymbol(Analyzer, Kind, Subprogram -> Name, Subprogram -> ReturnType, 0);
             }
             
+            for (int i = 0; i < Statement -> Block.SubprogramCount; i++) {
+                ASTSubprogram *Subprogram = Statement -> Block.Subprograms[i];
+                
+                EnterScope(Analyzer);
+                
+                for (size_t j = 0; j < Subprogram -> ParamCount; j++) {
+                    AnalyzeType(Analyzer, Subprogram -> Params[j].Type);
+                    DeclareSymbol(Analyzer, SYMBOL_PARAM, Subprogram -> Params[j].Name, Subprogram -> Params[j].Type, 0);
+                }
+                
+                if (Subprogram -> ReturnType != NULL) {
+                    AnalyzeType(Analyzer, Subprogram -> ReturnType);
+                }
+                
+                ASTSubprogram *PreviousFunction = Analyzer -> CurrentFunction;
+                
+                Analyzer -> CurrentFunction = Subprogram;
+                
+                for (size_t j = 0; j < Subprogram -> BodyCount; j++) {
+                    AnalyzeStatement(Analyzer, Subprogram -> Body[j]);
+                }
+                
+                Analyzer -> CurrentFunction = PreviousFunction;
+                
+                ExitScope(Analyzer);
+            }
+
             for (size_t i = 0; i < Statement -> Block.Count; i++) {
                 AnalyzeStatement(Analyzer, Statement -> Block.Statements[i]);
             }
