@@ -503,8 +503,8 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
         TraceToken("Binary operator", _Parser);
 
         ASTExpression *Right = ParseBinary(_Parser, OperatorPrecedence + 1);
-
         ASTExpression *BinaryExpression = calloc(1, sizeof(ASTExpression));
+
         BinaryExpression -> Kind = EXPR_BINARY;
         BinaryExpression -> Binary.Left = Left;
         BinaryExpression -> Binary.Right = Right;

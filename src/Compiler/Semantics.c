@@ -24,6 +24,8 @@ static size_t GetTokenLength(const char *String) {
            String[Len] != ')' &&
            String[Len] != '[' &&
            String[Len] != ']' &&
+           String[Len] != '<' &&
+           String[Len] != '>' &&
            String[Len] != ',' &&
            String[Len] != ':' &&
            String[Len] != ';') {
@@ -193,7 +195,7 @@ const char *TypeToString(ASTType *Type) {
             char TempBuffer[256];
 
             snprintf(TempBuffer, sizeof(TempBuffer), "%s", ElementString);
-            snprintf(Buffer, sizeof(Buffer), "Array<%s>", ElementString);
+            snprintf(Buffer, sizeof(Buffer), "Array<%s>", TempBuffer);
 
             return Buffer;
             
@@ -353,24 +355,26 @@ void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression) {
             break;
             
         case EXPR_IDENTIFIER: {
-            Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Identifier);
-            if (_Symbol == NULL) {
-                char ErrorMsg[256];
-
-                size_t NameLen = GetTokenLength(Expression -> Identifier);
-
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "undefined variable '%.*s'", (int)NameLen, Expression -> Identifier);
-                SemanticError(Analyzer, ErrorMsg);
-            }
-
             break;
         }
         
         case EXPR_BINARY:
-            AnalyzeExpression(Analyzer, Expression -> Binary.Left);
-            AnalyzeExpression(Analyzer, Expression -> Binary.Right);
+            ASTType *LeftType = GetExpressionType(Analyzer, Expression -> Binary.Left);
+            ASTType *RightType = GetExpressionType(Analyzer, Expression -> Binary.Right);
             
-            GetExpressionType(Analyzer, Expression);
+            if (LeftType == NULL || RightType == NULL) return;
+            if (!TypesEqual(LeftType, RightType)) {
+                char LeftTypeString[256];
+                char RightTypeString[256];
+
+                char ErrorMsg[512];
+                
+                snprintf(LeftTypeString, sizeof(LeftTypeString), "%s", TypeToString(LeftType));
+                snprintf(RightTypeString, sizeof(RightTypeString), "%s", TypeToString(RightType));
+                
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in binary operation: '%s' and '%s'", LeftTypeString, RightTypeString);
+                SemanticError(Analyzer, ErrorMsg);
+            }
 
             break;
             
@@ -428,9 +432,15 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 
                 ASTType *InitializerType = GetExpressionType(Analyzer, Statement -> VarDecl.Initializer);
                 if (InitializerType != NULL && !TypesEqual(Statement -> VarDecl.Type, InitializerType)) {
-                    char ErrorMsg[256];
+                    char ExpectedType[256];
+                    char ActualType[256];
 
-                    snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in variable initialization: expected '%s', got '%s'", TypeToString(Statement -> VarDecl.Type), TypeToString(InitializerType));
+                    char ErrorMsg[512];
+
+                    snprintf(ExpectedType, sizeof(ExpectedType), "%s", TypeToString(Statement -> VarDecl.Type));
+                    snprintf(ActualType, sizeof(ActualType), "%s", TypeToString(InitializerType));
+                    
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in variable initialization: expected '%s', got '%s'", ExpectedType, ActualType);
                     SemanticError(Analyzer, ErrorMsg);
                 }
             }
@@ -458,9 +468,15 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
             ASTType *ValueType = GetExpressionType(Analyzer, Statement -> Assign.Value);
             
             if (TargetType != NULL && ValueType != NULL && !TypesEqual(TargetType, ValueType)) {
+                char ExpectedType[256];
+                char ActualType[256];
+
                 char ErrorMsg[256];
 
-                snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in assignment: expected '%s', got '%s'", TypeToString(TargetType), TypeToString(ValueType));
+                snprintf(ExpectedType, sizeof(ExpectedType), "%s", TypeToString(TargetType));
+                snprintf(ActualType, sizeof(ActualType), "%s", TypeToString(ValueType));
+                
+                snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in assignment: expected '%s', got '%s'", ExpectedType, ActualType);
                 SemanticError(Analyzer, ErrorMsg);
             }
 
@@ -579,9 +595,15 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 ASTType *ReturnType = GetExpressionType(Analyzer, Statement -> Return.Value);
 
                 if (Analyzer -> CurrentFunction -> ReturnType != NULL && !TypesEqual(Analyzer -> CurrentFunction -> ReturnType, ReturnType)) {
+                    char ExpectedType[256];
+                    char ActualType[256];
+
                     char ErrorMsg[256];
 
-                    snprintf(ErrorMsg, sizeof(ErrorMsg), "return type mismatch: expected '%s', got '%s'", TypeToString(Analyzer -> CurrentFunction -> ReturnType), TypeToString(ReturnType));
+                    snprintf(ExpectedType, sizeof(ExpectedType), "%s", TypeToString(Analyzer -> CurrentFunction -> ReturnType));
+                    snprintf(ActualType, sizeof(ActualType), "%s", TypeToString(ReturnType));
+
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "return type mismatch: expected '%s', got '%s'", ExpectedType, ActualType);
                     SemanticError(Analyzer, ErrorMsg);
                 }
             } else {
@@ -629,6 +651,10 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 
                 DeclareSymbol(Analyzer, Kind, Subprogram -> Name, Subprogram -> ReturnType, 0);
             }
+
+            for (size_t i = 0; i < Statement -> Block.Count; i++) {
+                AnalyzeStatement(Analyzer, Statement -> Block.Statements[i]);
+            }
             
             for (int i = 0; i < Statement -> Block.SubprogramCount; i++) {
                 ASTSubprogram *Subprogram = Statement -> Block.Subprograms[i];
@@ -645,7 +671,7 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 }
                 
                 ASTSubprogram *PreviousFunction = Analyzer -> CurrentFunction;
-                
+
                 Analyzer -> CurrentFunction = Subprogram;
                 
                 for (size_t j = 0; j < Subprogram -> BodyCount; j++) {
@@ -657,10 +683,6 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 ExitScope(Analyzer);
             }
 
-            for (size_t i = 0; i < Statement -> Block.Count; i++) {
-                AnalyzeStatement(Analyzer, Statement -> Block.Statements[i]);
-            }
-            
             ExitScope(Analyzer);
 
             break;
@@ -719,8 +741,6 @@ int AnalyzeProgram(SemanticAnalyzer *Analyzer, ASTProgram *Program) {
     
     if (Analyzer -> ErrorCount > 0) {
         fprintf(stderr, "\nSemantic analysis failed with %d error(s)\n", Analyzer -> ErrorCount);
-    } else {
-        printf("Semantic analysis completed successfully\n");
     }
     
     return !Analyzer -> HasError;
