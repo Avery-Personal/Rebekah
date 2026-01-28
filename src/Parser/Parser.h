@@ -25,6 +25,8 @@ ASTOperator TokenToOperator(TokenType Type);
 
 Parser CreateParser(TokenStream *Tokens);
 
+ASTProgram *MergePrograms(ASTProgram *Prelude, ASTProgram *User);
+
 ASTProgram *ParseProgram(Parser *_Parser);
 ASTSubprogram *ParseSubprogram(Parser *_Parser);
 

@@ -82,6 +82,34 @@ Parser CreateParser(TokenStream *Tokens) {
     return _Parser;
 }
 
+ASTProgram *MergePrograms(ASTProgram *Prelude, ASTProgram *User) {
+    ASTProgram *Merged = calloc(1, sizeof(ASTProgram));
+
+    size_t idx = 0;
+
+    Merged -> SubprogramCount = Prelude -> SubprogramCount + User -> SubprogramCount;
+    Merged -> Subprograms = calloc(Merged -> SubprogramCount, sizeof(ASTSubprogram *));
+
+    for (size_t i = 0; i < Prelude -> SubprogramCount; i++)
+        Merged -> Subprograms[idx++] = Prelude -> Subprograms[i];
+
+    for (size_t i = 0; i < User -> SubprogramCount; i++)
+        Merged -> Subprograms[idx++] = User -> Subprograms[i];
+
+    Merged -> StatementCount = Prelude -> StatementCount + User -> StatementCount;
+    Merged -> Statements = calloc(Merged -> StatementCount, sizeof(ASTStatement *));
+
+    idx = 0;
+
+    for (size_t i = 0; i < Prelude -> StatementCount; i++)
+        Merged -> Statements[idx++] = Prelude -> Statements[i];
+
+    for (size_t i = 0; i < User -> StatementCount; i++)
+        Merged -> Statements[idx++] = User -> Statements[i];
+
+    return Merged;
+}
+
 ASTProgram *ParseProgram(Parser *_Parser) {
     ASTProgram *Program = calloc(1, sizeof(ASTProgram));
 
