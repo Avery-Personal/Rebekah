@@ -111,6 +111,8 @@ typedef struct {
     size_t FunctionCount;
 } IRProgram;
 
+char *ExtractName(const char *Source);
+
 IRValue *IRCreateTemp(IRTypeKind Type);
 IRValue *IRCreateVar(const char *Name, IRTypeKind Type);
 IRValue *IRCreateConst(int64_t Value);

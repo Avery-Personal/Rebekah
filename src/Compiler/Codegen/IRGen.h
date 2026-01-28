@@ -1,8 +1,8 @@
 #ifndef IRGEN_H
 #define IRGEN_H
 
-#include "../Parser/AST.h"
-#include "IR.h"
+#include "../../Parser/AST.h"
+#include "../IR.h"
 
 typedef struct IRGenContext {
     IRFunction *CurrentFunction;

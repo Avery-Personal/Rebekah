@@ -7,6 +7,37 @@
 static int TempCounter = 0;
 static int LabelCounter = 0;
 
+char *ExtractName(const char *Source) {
+    if (!Source) return NULL;
+    
+    size_t Len = 0;
+
+    while (Source[Len] != '\0' && 
+           Source[Len] != ' ' && 
+           Source[Len] != '\t' && 
+           Source[Len] != '\n' && 
+           Source[Len] != '\r' &&
+           Source[Len] != '(' &&
+           Source[Len] != ')' &&
+           Source[Len] != '[' &&
+           Source[Len] != ']' &&
+           Source[Len] != '<' &&
+           Source[Len] != '>' &&
+           Source[Len] != ',' &&
+           Source[Len] != ':' &&
+           Source[Len] != ';') {
+        Len++;
+    }
+    
+    char *Name = malloc(Len + 1);
+
+    memcpy(Name, Source, Len);
+
+    Name[Len] = '\0';
+
+    return Name;
+}
+
 IRValue *IRCreateTemp(IRTypeKind Type) {
     IRValue *Value = malloc(sizeof(IRValue));
 
@@ -22,7 +53,7 @@ IRValue *IRCreateVar(const char *Name, IRTypeKind Type) {
 
     Value -> Kind = VALUE_VAR;
     Value -> Type = Type;
-    Value -> Name = Name;
+    Value -> Name = ExtractName(Name);
     Value -> TempID = -1;
 
     return Value;

@@ -3,7 +3,8 @@
 #include <string.h>
 
 #include "IRGen.h"
-#include "../Semantics.h"
+#include "../IR.h"
+#include "../../Lexer/Lexer.h"
 
 IRGenContext *CreateIRGenContext(void) {
     IRGenContext *Context = malloc(sizeof(IRGenContext));
@@ -78,7 +79,7 @@ IRValue *LookupVariable(IRGenContext *Context, const char *Name) {
 
 void DeclareVariable(IRGenContext *Context, const char *Name, IRValue *Value) {
     Context -> Variables = realloc(Context -> Variables, sizeof(*Context -> Variables) * (Context -> VariableCount + 1));
-    Context -> Variables[Context -> VariableCount].Name = Name;
+    Context -> Variables[Context -> VariableCount].Name = ExtractName(Name);
     Context -> Variables[Context -> VariableCount].Value = Value;
     Context -> VariableCount++;
 }
@@ -98,7 +99,9 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
         case EXPR_LITERAL: {
             IRValue *Temp = IRCreateTemp(IR_TYPE_INT);
             IRInstruction *Instruction = IRCreateConstInst(Temp, Expression -> Literal.Int);
+
             IRAddInstruction(Context -> CurrentFunction, Instruction);
+
             return Temp;
         }
         
@@ -170,10 +173,10 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
                 Args[i] = GenerateExpression(Context, Expression -> Call.Args[i]);
             }
             
-            const char *FuncName = Expression -> Call.Callee -> Identifier;
+            const char *FunctionName = ExtractName(Expression -> Call.Callee -> Identifier);
             
             IRValue *Result = IRCreateTemp(IR_TYPE_INT);
-            IRInstruction *Call = IRCreateCall(Result, FuncName, Args, Expression -> Call.ArgCount);
+            IRInstruction *Call = IRCreateCall(Result, FunctionName, Args, Expression -> Call.ArgCount);
 
             IRAddInstruction(Context -> CurrentFunction, Call);
             
@@ -422,7 +425,9 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
 }
 
 void GenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
-    IRFunction *Function = IRCreateFunction(Subprogram -> Name, IR_TYPE_INT);
+    const char *FunctionName = ExtractName(Subprogram -> Name);
+    
+    IRFunction *Function = IRCreateFunction(FunctionName, IR_TYPE_INT);
     IRFunction *OldFunction = Context -> CurrentFunction;
 
     size_t OldVarCount = Context -> VariableCount;
