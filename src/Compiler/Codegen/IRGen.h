@@ -26,7 +26,7 @@ IRProgram *GenerateIR(ASTProgram *Program);
 IRGenContext *CreateIRGenContext(void);
 void DestroyIRGenContext(IRGenContext *Context);
 
-void GenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram);
+void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram);
 void GenerateStatement(IRGenContext *Context, ASTStatement *Statement);
 IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression);
 

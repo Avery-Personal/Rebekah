@@ -188,6 +188,7 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             IRValue *Array = IRCreateTemp(IR_TYPE_PTR);
             
             IRInstruction *Alloc = IRCreateArrayAlloc(Array, Size);
+
             IRAddInstruction(Context -> CurrentFunction, Alloc);
             
             for (size_t i = 0; i < Expression -> Array.Count; i++) {
@@ -246,6 +247,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
 
                 IRAddInstruction(Context -> CurrentFunction, Store);
             }
+            
             break;
         }
         
@@ -407,7 +409,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
         
         case STMT_BLOCK: {
             for (size_t i = 0; i < Statement -> Block.SubprogramCount; i++) {
-                GenerateFunction(Context, Statement -> Block.Subprograms[i]);
+                IRGenerateFunction(Context, Statement -> Block.Subprograms[i]);
             }
             
             for (size_t i = 0; i < Statement -> Block.Count; i++) {
@@ -424,7 +426,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
     }
 }
 
-void GenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
+void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
     const char *FunctionName = ExtractName(Subprogram -> Name);
     
     IRFunction *Function = IRCreateFunction(FunctionName, IR_TYPE_INT);
@@ -456,7 +458,7 @@ IRProgram *GenerateIR(ASTProgram *Program) {
     IRGenContext *Context = CreateIRGenContext();
     
     for (size_t i = 0; i < Program -> SubprogramCount; i++) {
-        GenerateFunction(Context, Program -> Subprograms[i]);
+        IRGenerateFunction(Context, Program -> Subprograms[i]);
     }
     
     if (Program -> StatementCount > 0) {
