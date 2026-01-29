@@ -235,6 +235,7 @@ struct ASTSubprogram {
 
     struct {
         const char *Name;
+
         ASTType *Type;
     } *Params;
 
@@ -243,6 +244,9 @@ struct ASTSubprogram {
 
     ASTStatement **Body;
     size_t BodyCount;
+
+    struct ASTSubprogram **NestedSubprograms;
+    size_t NestedSubprogramCount;
 };
 
 typedef struct ASTProgram {

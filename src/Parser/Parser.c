@@ -211,6 +211,9 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
     Function -> Body = Block -> Block.Statements;
     Function -> BodyCount = Block -> Block.Count;
 
+    Function -> NestedSubprograms = Block -> Block.Subprograms;
+    Function -> NestedSubprogramCount = Block -> Block.SubprogramCount;
+
     free(Block);
 
     TraceExit("ParseSubprogram", _Parser);

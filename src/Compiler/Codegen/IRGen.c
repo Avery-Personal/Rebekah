@@ -6,6 +6,31 @@
 #include "../IR.h"
 #include "../../Lexer/Lexer.h"
 
+void DeclareVariablesInStatement(IRGenContext *Context, ASTStatement *Statement) {
+    if (!Statement) return;
+    
+    switch (Statement -> Kind) {
+        case STMT_VAR_DECL: {
+            IRValue *Variable = IRCreateVar(Statement -> VarDecl.Name, IR_TYPE_INT);
+
+            DeclareVariable(Context, Statement -> VarDecl.Name, Variable);
+
+            break;
+        }
+        
+        case STMT_BLOCK: {
+            for (size_t i = 0; i < Statement -> Block.Count; i++) {
+                DeclareVariablesInStatement(Context, Statement -> Block.Statements[i]);
+            }
+
+            break;
+        }
+        
+        default:
+            break;
+    }
+}
+
 IRGenContext *CreateIRGenContext(void) {
     IRGenContext *Context = malloc(sizeof(IRGenContext));
 
@@ -108,7 +133,8 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
         case EXPR_IDENTIFIER: {
             IRValue *Variable = LookupVariable(Context, Expression -> Identifier);
             if (!Variable) {
-                fprintf(stderr, "IRGen Error: Undefined variable\n");
+                fprintf(stderr, "IR Error: Undefined variable\n");
+                
                 return NULL;
             }
             
@@ -142,7 +168,7 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
                 case OP_OR:  Op = IR_OR; break;
 
                 default:
-                    fprintf(stderr, "IRGen Error: Unknown binary operator\n");
+                    fprintf(stderr, "IR Error: Unknown binary operator\n");
 
                     return NULL;
             }
@@ -226,7 +252,7 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
         }
         
         default:
-            fprintf(stderr, "IRGen Error: Unhandled expression kind\n");
+            fprintf(stderr, "IR Error: Unhandled expression kind\n");
 
             return NULL;
     }
@@ -237,9 +263,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
     
     switch (Statement -> Kind) {
         case STMT_VAR_DECL: {
-            IRValue *Variable = IRCreateVar(Statement -> VarDecl.Name, IR_TYPE_INT);
-
-            DeclareVariable(Context, Statement -> VarDecl.Name, Variable);
+            IRValue *Variable = LookupVariable(Context, Statement -> VarDecl.Name);
             
             if (Statement -> VarDecl.Initializer) {
                 IRValue *Init = GenerateExpression(Context, Statement -> VarDecl.Initializer);
@@ -247,7 +271,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
 
                 IRAddInstruction(Context -> CurrentFunction, Store);
             }
-            
+
             break;
         }
         
@@ -420,7 +444,7 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
         }
         
         default:
-            fprintf(stderr, "IRGen Warning: Unhandled statement kind\n");
+            fprintf(stderr, "IR Warning: Unhandled statement kind\n");
 
             break;
     }
@@ -442,6 +466,14 @@ void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
         Parameter -> Kind = VALUE_PARAM;
 
         DeclareVariable(Context, Subprogram -> Params[i].Name, Parameter);
+    }
+    
+    for (size_t i = 0; i < Subprogram -> BodyCount; i++) {
+        DeclareVariablesInStatement(Context, Subprogram -> Body[i]);
+    }
+
+    for (size_t i = 0; i < Subprogram -> NestedSubprogramCount; i++) {
+        IRGenerateFunction(Context, Subprogram -> NestedSubprograms[i]);
     }
     
     for (size_t i = 0; i < Subprogram -> BodyCount; i++) {
