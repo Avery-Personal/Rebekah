@@ -2,8 +2,8 @@
 
 method Main is
 begin
-    x : Integer = 5
-    Char : Character = 'H'
+    MUTABLE x : Integer = 5
+    -- Char : Character = 'H'
 
     output(x)
 

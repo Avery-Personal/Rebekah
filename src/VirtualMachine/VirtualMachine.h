@@ -94,9 +94,19 @@ typedef struct {
     int Halted;
 } VirtualMachine;
 
+const char *OpcodeName(uint8_t Op);
+
 static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCount, uint16_t *NextRegister);
 
 BytecodeFunction *LowerFunction(IRFunction *_IRFunction);
-VirtualMachine *LowerProgram(IRProgram *Program);
+BytecodeProgram *LowerProgram(IRProgram *Program);
+
+VirtualMachine *VirtualMachineCreate(BytecodeProgram *Program);
+
+void PrintInstruction(BytecodeInstruction *Instruction, uint32_t Index);
+void PrintFunction(BytecodeFunction *Function, uint32_t Index);
+void PrintProgram(BytecodeProgram *Program);
+
+void DumpVirtualMachineState(VirtualMachine *_VirtualMachine);
 
 #endif

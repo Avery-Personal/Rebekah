@@ -4,7 +4,7 @@
 #include "../Lexer/Lexer.h"
 #include "AST.h"
 
-#define PARSER_TRACE 1
+#define PARSER_TRACE 0
 
 typedef struct {
     TokenStream *Tokens;

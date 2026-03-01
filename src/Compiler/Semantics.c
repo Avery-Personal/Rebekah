@@ -459,7 +459,7 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
 
                     size_t NameLen = GetTokenLength(Statement->Assign.Target->Identifier);
 
-                    snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int)NameLen, Statement -> Assign.Target -> Identifier);
+                    snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int) NameLen, Statement -> Assign.Target -> Identifier);
                     SemanticError(Analyzer, ErrorMsg);
                 }
             }

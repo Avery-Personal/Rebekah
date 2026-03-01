@@ -73,9 +73,11 @@ IRValue *IRCreateConst(int64_t ConstValue) {
 IRInstruction *IRCreateConstInst(IRValue *Destination, int64_t Value) {
     IRInstruction *Instruction = malloc(sizeof(IRInstruction));
 
+    IRValue *ConstValue = IRCreateConst(Value);
+
     Instruction -> Op = IR_CONST;
     Instruction -> Destination = Destination;
-    Instruction -> Source1 = NULL;
+    Instruction -> Source1 = ConstValue;
     Instruction -> Source2 = NULL;
     Instruction -> Extra = NULL;
     Instruction -> Args = NULL;
