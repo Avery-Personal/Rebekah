@@ -591,6 +591,14 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
         TraceExit("ParsePrimary", _Parser);
 
         return Expression;
+    } else if (ParserMatch(_Parser, TOKEN_BOOLEAN)) {
+        Expression -> Kind = EXPR_LITERAL;
+        Expression -> Literal.Bool = ParserPrevious(_Parser) -> Literal.Int;
+
+        TraceToken("Matched BOOLEAN", _Parser);
+        TraceExit("ParsePrimary", _Parser);
+
+        return Expression;
     } else if (ParserMatch(_Parser, TOKEN_STRING_LITERAL)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.String = ParserPrevious(_Parser) -> Literal.String;

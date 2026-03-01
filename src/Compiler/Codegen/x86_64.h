@@ -16,6 +16,13 @@ typedef struct CodeGen {
     } *VarLocations;
 
     size_t VarLocationCount;
+
+    struct {
+        const char *String;
+        const char *Label;
+    } *Strings;
+
+    size_t StringCount;
     
     int LabelCounter;
 } CodeGen;

@@ -6,6 +6,45 @@
 #include "../IR.h"
 #include "../../Lexer/Lexer.h"
 
+static IRTypeKind GetExpressionIRType(ASTExpression *Expression) {
+    if (!Expression) return IR_TYPE_VOID;
+    
+    switch (Expression -> Kind) {
+        case EXPR_LITERAL:
+            if (Expression -> Literal.String) {
+                return IR_TYPE_PTR;
+            }
+
+            return IR_TYPE_INT;
+        
+        case EXPR_IDENTIFIER:
+        case EXPR_BINARY:
+        case EXPR_UNARY:
+        case EXPR_CALL: return IR_TYPE_INT;
+        case EXPR_ARRAY_LITERAL: return IR_TYPE_PTR;
+        
+        default: return IR_TYPE_INT;
+    }
+}
+
+static const char *MangleOutputName(ASTExpression **Args, size_t ArgCount) {
+    static char Buffer[128];
+
+    strcpy(Buffer, "output");
+    
+    for (size_t i = 0; i < ArgCount; i++) {
+        IRTypeKind Type = GetExpressionIRType(Args[i]);
+
+        if (Type == IR_TYPE_PTR) {
+            strcat(Buffer, "_str");
+        } else {
+            strcat(Buffer, "_int");
+        }
+    }
+    
+    return Buffer;
+}
+
 void DeclareVariablesInStatement(IRGenContext *Context, ASTStatement *Statement) {
     if (!Statement) return;
     
@@ -55,20 +94,7 @@ void DestroyIRGenContext(IRGenContext *Context) {
 IRValue *LookupVariable(IRGenContext *Context, const char *Name) {
     size_t NameLen = 0;
 
-    while (Name[NameLen] != '\0' && 
-           Name[NameLen] != ' ' && 
-           Name[NameLen] != '\t' && 
-           Name[NameLen] != '\n' && 
-           Name[NameLen] != '\r' &&
-           Name[NameLen] != '(' &&
-           Name[NameLen] != ')' &&
-           Name[NameLen] != '[' &&
-           Name[NameLen] != ']' &&
-           Name[NameLen] != '<' &&
-           Name[NameLen] != '>' &&
-           Name[NameLen] != ',' &&
-           Name[NameLen] != ':' &&
-           Name[NameLen] != ';') {
+    while (Name[NameLen] != '\0' && Name[NameLen] != ' ' && Name[NameLen] != '\t' && Name[NameLen] != '\n' && Name[NameLen] != '\r' && Name[NameLen] != '(' && Name[NameLen] != ')' && Name[NameLen] != '[' && Name[NameLen] != ']' && Name[NameLen] != '<' && Name[NameLen] != '>' && Name[NameLen] != ',' && Name[NameLen] != ':' && Name[NameLen] != ';') {
         NameLen++;
     }
     
@@ -77,20 +103,7 @@ IRValue *LookupVariable(IRGenContext *Context, const char *Name) {
 
         size_t VarLen = 0;
 
-        while (VarName[VarLen] != '\0' && 
-               VarName[VarLen] != ' ' && 
-               VarName[VarLen] != '\t' && 
-               VarName[VarLen] != '\n' && 
-               VarName[VarLen] != '\r' &&
-               VarName[VarLen] != '(' &&
-               VarName[VarLen] != ')' &&
-               VarName[VarLen] != '[' &&
-               VarName[VarLen] != ']' &&
-               VarName[VarLen] != '<' &&
-               VarName[VarLen] != '>' &&
-               VarName[VarLen] != ',' &&
-               VarName[VarLen] != ':' &&
-               VarName[VarLen] != ';') {
+        while (VarName[VarLen] != '\0' && VarName[VarLen] != ' ' && VarName[VarLen] != '\t' && VarName[VarLen] != '\n' && VarName[VarLen] != '\r' && VarName[VarLen] != '(' && VarName[VarLen] != ')' && VarName[VarLen] != '[' && VarName[VarLen] != ']' && VarName[VarLen] != '<' && VarName[VarLen] != '>' && VarName[VarLen] != ',' && VarName[VarLen] != ':' && VarName[VarLen] != ';') {
             VarLen++;
         }
         
@@ -123,9 +136,16 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
     switch (Expression -> Kind) {
         case EXPR_LITERAL: {
             IRValue *Temp = IRCreateTemp(IR_TYPE_INT);
-            IRInstruction *Instruction = IRCreateConstInst(Temp, Expression -> Literal.Int);
 
-            IRAddInstruction(Context -> CurrentFunction, Instruction);
+            if (Expression -> Literal.String) {
+                Temp -> Kind = VALUE_CONST;
+                Temp -> Type = IR_TYPE_PTR;
+                Temp -> Label = Expression -> Literal.String;
+            } else {
+                IRInstruction *Instruction = IRCreateConstInst(Temp, Expression -> Literal.Int);
+
+                IRAddInstruction(Context -> CurrentFunction, Instruction);
+            }
 
             return Temp;
         }
@@ -200,6 +220,10 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             }
             
             const char *FunctionName = ExtractName(Expression -> Call.Callee -> Identifier);
+
+            if (strcmp(FunctionName, "output") == 0) {
+                FunctionName = MangleOutputName(Expression -> Call.Args, Expression -> Call.ArgCount);
+            }
             
             IRValue *Result = IRCreateTemp(IR_TYPE_INT);
             IRInstruction *Call = IRCreateCall(Result, FunctionName, Args, Expression -> Call.ArgCount);

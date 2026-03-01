@@ -1,6 +1,26 @@
 #include <stdlib.h>
 #include <string.h>
+
 #include "x86_64.h"
+
+const char *RegisterString(CodeGen *Code, const char *String) {
+    for (size_t i = 0; i < Code -> StringCount; i++) {
+        if (strcmp(Code -> Strings[i].String, String) == 0) {
+            return Code -> Strings[i].Label;
+        }
+    }
+    
+    char *Label = malloc(32);
+
+    snprintf(Label, 32, "str_%zu", Code -> StringCount);
+    
+    Code -> Strings = realloc(Code -> Strings, sizeof(*Code -> Strings) * (Code -> StringCount + 1));
+    Code -> Strings[Code -> StringCount].String = String;
+    Code -> Strings[Code -> StringCount].Label = Label;
+    Code -> StringCount++;
+    
+    return Label;
+}
 
 CodeGen *CreateCodeGen(FILE *Output) {
     CodeGen *Code = malloc(sizeof(CodeGen));
@@ -66,8 +86,15 @@ void GenerateInstruction(CodeGen *Code, IRInstruction *Instruction) {
             Code -> StackOffset += 8;
 
             SetVarLocation(Code, Instruction -> Destination, Offset);
-            
-            fprintf(Output, "    mov QWORD [rbp-%d], %lld\n", Offset, Instruction -> Destination -> IntVal);
+
+            if (Instruction -> Destination -> Kind == VALUE_CONST && Instruction -> Destination -> Type == IR_TYPE_PTR) {
+                const char *Label = RegisterString(Code, Instruction -> Destination -> Label);
+
+                fprintf(Output, "    lea rax, [rel %s]\n", Label);
+                fprintf(Output, "    mov [rbp-%d], rax\n", Offset);
+            } else {
+                fprintf(Output, "    mov QWORD [rbp-%d], %lld\n", Offset, Instruction -> Destination -> IntValue);
+            }
 
             break;
         }
@@ -127,6 +154,7 @@ void GenerateInstruction(CodeGen *Code, IRInstruction *Instruction) {
             fprintf(Output, "    cqo\n");
             fprintf(Output, "    idiv rbx\n");
             fprintf(Output, "    mov [rbp-%d], rax\n", DestinationOffset);
+
             break;
         }
         
@@ -215,12 +243,12 @@ void GenerateInstruction(CodeGen *Code, IRInstruction *Instruction) {
         }
         
         case IR_CALL: {
-            const char *argRegs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+            const char *ArgRegisters[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
             
             for (size_t i = 0; i < Instruction -> ArgCount && i < 6; i++) {
                 int ArgOffset = GetVarLocation(Code, Instruction -> Args[i]);
 
-                fprintf(Output, "    mov %s, [rbp-%d]\n", argRegs[i], ArgOffset);
+                fprintf(Output, "    mov %s, [rbp-%d]\n", ArgRegisters[i], ArgOffset);
             }
             
             for (int i = Instruction -> ArgCount - 1; i >= 6; i--) {
@@ -373,16 +401,32 @@ void GenerateAssembly(IRProgram *Program, const char *OutputFile) {
     CodeGen *Code = CreateCodeGen(Output);
     
     fprintf(Output, "; Rebekah | Copyright 2026 © AveriC\n");
-    fprintf(Output, "section .text\n");
+    fprintf(Output, "section .text\n\n");
+
+    fprintf(Output, "extern outputstr\n");
+    fprintf(Output, "extern outputint\n");
+    fprintf(Output, "extern outputstrint\n");
+    fprintf(Output, "extern outputintstr\n");
+    fprintf(Output, "extern outputstrstr\n");
+    fprintf(Output, "extern outputintint\n");
+    fprintf(Output, "extern input\n");
+    fprintf(Output, "\n");
     
     for (size_t i = 0; i < Program -> FunctionCount; i++) {
         fprintf(Output, "global %s\n", Program -> Functions[i] -> Name);
     }
 
     fprintf(Output, "\n");
-    
+    fprintf(Output, "section .text\n\n");
+
     for (size_t i = 0; i < Program -> FunctionCount; i++) {
         GenerateFunction(Code, Program -> Functions[i]);
+    }
+
+    fprintf(Output, "\nsection .data\n");
+
+    for (size_t i = 0; i < Code -> StringCount; i++) {
+        fprintf(Output, "%s: db `%s`, 0\n", Code -> Strings[i].Label, Code -> Strings[i].String);
     }
     
     DestroyCodeGen(Code);

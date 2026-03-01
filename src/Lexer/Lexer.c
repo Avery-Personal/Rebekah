@@ -29,6 +29,7 @@ int IsAlphanumeric(int Character) {
 const char *TokenTypeToString(TokenType Type) {
     switch (Type) {
         case TOKEN_IDENTIFIER: return "IDENTIFIER";
+        case TOKEN_BOOLEAN: return "BOOLEAN";
         case TOKEN_NUMBER: return "NUMBER";
         case TOKEN_ARRAY: return "ARRAY";
         case TOKEN_CHAR_LITERAL: return "CHAR_LITERAL";
@@ -141,6 +142,7 @@ TokenType ResolveIdentifier(const char* Start, size_t Len) {
     if (Len == 7 && memcmp(Start, "MUTABLE", 7) == 0) return TOKEN_MUTABLE;
     if (Len == 5 && memcmp(Start, "CONST", 5) == 0) return TOKEN_CONSTANT;
     if (Len == 5 && memcmp(Start, "Array", 5) == 0) return TOKEN_ARRAY;
+    if (Len == 7 && memcmp(Start, "Boolean", 7) == 0) return TOKEN_BOOLEAN;
     if (Len == 4 && memcmp(Start, "true", 4) == 0) return TOKEN_TRUE;
     if (Len == 5 && memcmp(Start, "false", 5) == 0) return TOKEN_FALSE;
     if (Len == 2 && memcmp(Start, "if", 2) == 0) return TOKEN_IF;

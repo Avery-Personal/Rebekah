@@ -1,0 +1,4 @@
+function Lerp(A : Float, B : Float, T : Float) -> Float is
+begin
+    return A + (B - A) * T
+end Lerp

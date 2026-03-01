@@ -64,7 +64,7 @@ IRValue *IRCreateConst(int64_t ConstValue) {
 
     Value -> Kind = VALUE_CONST;
     Value -> Type = IR_TYPE_INT;
-    Value -> IntVal = ConstValue;
+    Value -> IntValue = ConstValue;
     Value -> TempID = -1;
 
     return Value;
@@ -81,7 +81,7 @@ IRInstruction *IRCreateConstInst(IRValue *Destination, int64_t Value) {
     Instruction -> Args = NULL;
     Instruction -> ArgCount = 0;
     
-    Destination -> IntVal = Value;
+    Destination -> IntValue = Value;
     
     return Instruction;
 }
@@ -394,7 +394,7 @@ static void IRPrintValue(IRValue *Value) {
 
             break;
         case VALUE_CONST:
-            printf("%lld", Value -> IntVal);
+            printf("%lld", Value -> IntValue);
 
             break;
         case VALUE_LABEL:
@@ -417,7 +417,7 @@ void IRPrint(IRProgram *Program) {
                 case IR_CONST:
                     printf("  ");
                     IRPrintValue(Instruction -> Destination);
-                    printf(" = %lld\n", Instruction -> Destination->IntVal);
+                    printf(" = %lld\n", Instruction -> Destination -> IntValue);
 
                     break;
                     
@@ -491,7 +491,7 @@ void IRPrint(IRProgram *Program) {
                         printf("  ");
                     }
 
-                    printf("CALL %s(", Instruction -> Source1->Label);
+                    printf("CALL %s(", Instruction -> Source1 -> Label);
 
                     for (size_t k = 0; k < Instruction -> ArgCount; k++) {
                         IRPrintValue(Instruction -> Args[k]);

@@ -65,11 +65,11 @@ typedef struct {
     IRTypeKind Type;
     
     union {
-        int64_t IntVal;
-        double FloatVal;
+        int64_t IntValue;
+        double FloatValue;
         
-        char CharVal;
-        int BoolVal;
+        char CharValue;
+        int BoolValue;
         
         const char *Label;
         const char *Name;
