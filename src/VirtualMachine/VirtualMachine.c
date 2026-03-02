@@ -35,10 +35,38 @@ const char *OpcodeName(uint8_t Op) {
         case BC_OP_CALL: return "CALL";
         case BC_OP_RET: return "RET";
 
+        case BC_OP_PRINT: return "PRINT";
+
         case BC_OP_HALT: return "HALT";
 
         default: return "UNKNOWN";
     }
+}
+
+static void NativeOutput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount) {
+    for (size_t i = 0; i < ArgumentCount; i++) {
+        if (i > 0)
+            printf(" ");
+
+        if (ArgumentTypes[i] == IR_TYPE_PTR) {
+            printf("%s", (const char *)(uintptr_t) Arguments[i]);
+        } else {
+            printf("%lld", (int64_t) Arguments[i]);
+        }
+    }
+
+    printf("\n");
+}
+
+static void RegisterNative(BytecodeProgram *Program, const char *Name, NativeFunction Function, uint16_t ArgumentCount) {
+    Program -> Natives = realloc(Program -> Natives, sizeof(NativeFunctionEntry) * (Program -> NativeCount + 1));
+
+    NativeFunctionEntry *Entry = &Program -> Natives[Program -> NativeCount++];
+
+    Entry -> Name = Name;
+    Entry -> Function = Function;
+    Entry -> Type = FUNCTION_NATIVE;
+    Entry -> ArgumentCount = ArgumentCount;
 }
 
 static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCount, uint16_t *NextRegister) {
@@ -60,6 +88,7 @@ static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCo
 BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
     BytecodeFunction *Function = calloc(1, sizeof(BytecodeFunction));
 
+    Function -> Name = _IRFunction -> Name;
     Function -> InstructionCount = _IRFunction -> InstructionCount;
     Function -> Code = calloc(Function -> InstructionCount, sizeof(BytecodeInstruction));
 
@@ -69,6 +98,15 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
     RegisterEntry RegisterMap[512];
     size_t RegisterMapCount = 0;
     uint16_t NextRegister = 0;
+
+    typedef struct {
+        IRValue *Variable;
+        uint16_t Index;
+    } VariableEntry;
+
+    VariableEntry VariableMap[256];
+    size_t VariableCount = 0;
+    uint16_t NextGlobal = 0;
 
     size_t ByteIndex = 0;
 
@@ -96,6 +134,76 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
         BytecodeInstruction *Output = &Function -> Code[ByteIndex];
 
         switch (Instruction -> Op) {
+            case IR_STORE: {
+                IRValue *Variable = Instruction -> Destination;
+
+                uint16_t GlobalIndex = 0;
+
+                int Found = 0;
+
+                for (size_t v = 0; v < VariableCount; v++) {
+                    if (VariableMap[v].Variable == Variable) {
+                        GlobalIndex = VariableMap[v].Index;
+
+                        Found = 1;
+
+                        break;
+                    }
+                }
+
+                if (!Found) {
+                    GlobalIndex = NextGlobal++;
+
+                    VariableMap[VariableCount].Variable   = Variable;
+                    VariableMap[VariableCount].Index = GlobalIndex;
+
+                    VariableCount++;
+                }
+
+                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+
+                Output -> Opcode = BC_OP_STORE;
+                Output -> A = GlobalIndex;
+                Output -> B = Source;
+
+                break;
+            }
+
+            case IR_LOAD: {
+                IRValue *Variable = Instruction -> Source1;
+
+                uint16_t GlobalIndex = 0;
+
+                int Found = 0;
+
+                for (size_t v = 0; v < VariableCount; v++) {
+                    if (VariableMap[v].Variable == Variable) {
+                        GlobalIndex = VariableMap[v].Index;
+
+                        Found = 1;
+
+                        break;
+                    }
+                }
+
+                if (!Found) {
+                    GlobalIndex = NextGlobal++;
+
+                    VariableMap[VariableCount].Variable = Variable;
+                    VariableMap[VariableCount].Index = GlobalIndex;
+                    
+                    VariableCount++;
+                }
+
+                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+
+                Output -> Opcode = BC_OP_LOAD;
+                Output -> A = Destination;
+                Output -> B = GlobalIndex;
+
+                break;
+            }
+
             case IR_CONST: {
                 uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
 
@@ -131,6 +239,41 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
                 break;
             }
 
+            case IR_CALL: {
+                const char *FunctionName = Instruction -> Source1 -> Label;
+
+                CallArgumentInfo Info;
+
+                Info.FunctionName = FunctionName;
+                Info.InstructionIndex = ByteIndex;
+                Info.ArgumentCount = (uint16_t) Instruction -> ArgCount;
+                Info.ArgumentTypes = malloc(Instruction -> ArgCount);
+
+                uint16_t FirstArgumentRegister = 0;
+
+                for (size_t a = 0; a < Instruction -> ArgCount; a++) {
+                    uint16_t Register = AssignRegister(Instruction -> Args[a], RegisterMap, &RegisterMapCount, &NextRegister);
+                    if (a == 0)
+                        FirstArgumentRegister = Register;
+
+                    Info.ArgumentTypes[a] = (uint8_t)Instruction -> Args[a] -> Type;
+                }
+
+                Function -> CallArguments = realloc(Function -> CallArguments, sizeof(CallArgumentInfo) * (Function -> CallArgumentCount + 1));
+                Function -> CallArguments[Function -> CallArgumentCount++] = Info;
+
+                uint16_t Destination = 0;
+                if (Instruction -> Destination)
+                    Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+
+                Output -> Opcode = BC_OP_CALL;
+                Output -> A = Destination;
+                Output -> B = FirstArgumentRegister;
+                Output -> C = (uint8_t) Instruction -> ArgCount;
+
+                break;
+            }
+
             case IR_RETURN: {
                 uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
 
@@ -154,15 +297,15 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
                 }
 
                 break;
-        }
+            }
 
-        default:
-            break;
+            default: break;
         }
 
         ByteIndex++;
     }
 
+    Function -> GlobalCount = NextGlobal;
     Function -> RegisterCount = NextRegister;
 
     free(Labels);
@@ -179,6 +322,8 @@ BytecodeProgram *LowerProgram(IRProgram *Program) {
     for (size_t i = 0; i < Program -> FunctionCount; i++) {
         Bytecode -> Functions[i] = LowerFunction(Program -> Functions[i]);
     }
+
+    RegisterNative(Bytecode, "output", NativeOutput, 0);
 
     Bytecode -> EntryFunction = 0;
     Bytecode -> GlobalCount = 0;
@@ -204,6 +349,267 @@ VirtualMachine *VirtualMachineCreate(BytecodeProgram *Program) {
     _VirtualMachine -> CurrentFrame = Frame;
 
     return _VirtualMachine;
+}
+
+static VirtualFrame *VirtualMachineCreateFrame(VirtualMachine *_VirtualMachine, BytecodeFunction *Function, VirtualFrame *Caller) {
+    VirtualFrame *Frame = (VirtualFrame *) malloc(sizeof(VirtualFrame));
+
+    Frame -> Registers = calloc(Function -> RegisterCount, sizeof(uint64_t));
+    Frame -> Globals = calloc(Function -> GlobalCount, sizeof(uint64_t));
+    Frame -> Caller = Caller;
+    Frame -> Function = Function;
+    Frame -> InstructionPointer = 0;
+
+    return Frame;
+}
+
+static void VirtualMachineDestroyFrame(VirtualMachine *_VirtualMachine) {
+    VirtualFrame *OldFrame = _VirtualMachine -> CurrentFrame;
+
+    if (!OldFrame)
+        return;
+
+    _VirtualMachine -> CurrentFrame = OldFrame -> Caller;
+
+    free(OldFrame -> Registers);
+    free(OldFrame);
+}
+
+void VirtualMachineExecute(VirtualMachine *_VirtualMachine) {
+    if (!_VirtualMachine -> Program) return;
+
+    BytecodeProgram *Program = _VirtualMachine -> Program;
+
+    if (Program -> EntryFunction >= Program -> FunctionCount)
+        return;
+
+    _VirtualMachine -> CurrentFrame = VirtualMachineCreateFrame(_VirtualMachine, Program -> Functions[Program -> EntryFunction], NULL);
+
+    while (!_VirtualMachine -> Halted && _VirtualMachine -> CurrentFrame) {
+        VirtualFrame *Frame = _VirtualMachine -> CurrentFrame;
+        BytecodeFunction *Function = Frame -> Function;
+
+        if (Frame -> InstructionPointer >= Function -> InstructionCount) {
+            _VirtualMachine -> Halted = 1;
+
+            break;
+        }
+
+        BytecodeInstruction Instruction = Function -> Code[Frame -> InstructionPointer++];
+
+        uint64_t *Register = Frame -> Registers;
+        uint64_t *Global = Frame -> Globals;
+
+        switch (Instruction.Opcode) {
+            case BC_OP_NOP:
+                break;
+
+            case BC_OP_CONST:
+                Register[Instruction.A] = Function -> Constants[Instruction.B];
+
+                break;
+
+            case BC_OP_MOV:
+                Register[Instruction.A] = Register[Instruction.B];
+
+                break;
+
+            case BC_OP_LOAD:
+                Register[Instruction.A] = Global[Instruction.B];
+
+                break;
+
+            case BC_OP_STORE:
+                Global[Instruction.A] = Register[Instruction.B];
+
+                break;
+
+            case BC_OP_ADD:
+                Register[Instruction.A] = Register[Instruction.B] + Register[Instruction.C];
+
+                break;
+
+            case BC_OP_SUB:
+                Register[Instruction.A] = Register[Instruction.B] - Register[Instruction.C];
+
+                break;
+
+            case BC_OP_MUL:
+                Register[Instruction.A] = Register[Instruction.B] * Register[Instruction.C];
+
+                break;
+
+            case BC_OP_DIV:
+                if (Register[Instruction.C] != 0)
+                    Register[Instruction.A] = Register[Instruction.B] / Register[Instruction.C];
+
+                break;
+
+            case BC_OP_MOD:
+                if (Register[Instruction.C] != 0)
+                    Register[Instruction.A] = Register[Instruction.B] % Register[Instruction.C];
+
+                break;
+
+            case BC_OP_NEG:
+                Register[Instruction.A] = -(int64_t) Register[Instruction.B];
+
+                break;
+
+            case BC_OP_CMP_EQ:
+                Register[Instruction.A] = (Register[Instruction.B] == Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_CMP_NE:
+                Register[Instruction.A] = (Register[Instruction.B] != Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_CMP_LT:
+                Register[Instruction.A] = (Register[Instruction.B] < Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_CMP_GT:
+                Register[Instruction.A] = (Register[Instruction.B] > Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_CMP_LE:
+                Register[Instruction.A] = (Register[Instruction.B] <= Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_CMP_GE:
+                Register[Instruction.A] = (Register[Instruction.B] >= Register[Instruction.C]);
+
+                break;
+
+            case BC_OP_JMP:
+                Frame -> InstructionPointer = Instruction.A;
+
+                break;
+
+            case BC_OP_JMP_IF:
+                if (Register[Instruction.B])
+                    Frame -> InstructionPointer = Instruction.A;
+
+                break;
+
+            case BC_OP_JMP_IFN:
+                if (!Register[Instruction.B])
+                    Frame -> InstructionPointer = Instruction.A;
+
+                break;
+
+            case BC_OP_CALL: {
+                CallArgumentInfo *ArgumentInfo = NULL;
+
+                for (uint32_t k = 0; k < Frame -> Function -> CallArgumentCount; k++) {
+                    if (Frame -> Function -> CallArguments[k].InstructionIndex == Frame -> InstructionPointer - 1) {
+                        ArgumentInfo = &Frame -> Function -> CallArguments[k];
+
+                        break;
+                    }
+                }
+
+                if (!ArgumentInfo) {
+                    fprintf(stderr, "[Virtual Machine Error] no call argument info found\n");
+
+                    _VirtualMachine -> Halted = 1;
+
+                    break;
+                }
+
+                const char *FunctionName = ArgumentInfo -> FunctionName;
+                int Dispatched = 0;
+
+                for (uint32_t n = 0; n < Program -> NativeCount; n++) {
+                    NativeFunctionEntry *Entry = &Program -> Natives[n];
+
+                    if (strcmp(Entry -> Name, FunctionName) == 0) {
+                        uint64_t *Arguments = calloc(ArgumentInfo -> ArgumentCount, sizeof(uint64_t));
+
+                        for (size_t a = 0; a < ArgumentInfo -> ArgumentCount; a++)
+                            Arguments[a] = Frame -> Registers[Instruction.B + a];
+
+                        Entry -> Function(Arguments, ArgumentInfo -> ArgumentTypes, ArgumentInfo -> ArgumentCount);
+
+                        free(Arguments);
+
+                        Frame -> Registers[Instruction.A] = 0;
+                        
+                        Dispatched = 1;
+
+                        break;
+                    }
+                }
+
+                if (!Dispatched) {
+                    BytecodeFunction *Callee = NULL;
+
+                    for (uint32_t f = 0; f < Program -> FunctionCount; f++) {
+                        if (Program -> Functions[f] -> Name && strcmp(Program -> Functions[f] -> Name, FunctionName) == 0) {
+                            Callee = Program -> Functions[f];
+
+                            break;
+                        }
+                    }
+
+                    if (!Callee) {
+                        fprintf(stderr, "[Virtual Machine Error] undefined function '%s'\n", FunctionName);
+
+                        _VirtualMachine -> Halted = 1;
+
+                        break;
+                    }
+
+                    VirtualFrame *NewFrame = VirtualMachineCreateFrame(_VirtualMachine, Callee, Frame);
+
+                    for (uint16_t i = 0; i < Instruction.C; i++)
+                        NewFrame -> Registers[i] = Frame -> Registers[Instruction.B + i];
+
+                    NewFrame -> ReturnRegister = Instruction.A;
+
+                    _VirtualMachine -> CurrentFrame = NewFrame;
+                }
+
+                break;
+            }
+
+            case BC_OP_RET: {
+                uint64_t ReturnValue = Register[Instruction.A];
+                uint16_t DestinationRegister = Frame -> ReturnRegister;
+
+                VirtualMachineDestroyFrame(_VirtualMachine);
+
+                if (_VirtualMachine -> CurrentFrame) {
+                    _VirtualMachine -> CurrentFrame -> Registers[DestinationRegister] = ReturnValue;
+                } else {
+                    _VirtualMachine -> Halted = 1;
+                }
+
+                break;
+            }
+
+            case BC_OP_PRINT: {
+                printf("\nHello from Rebekah!\n");
+            }
+
+            case BC_OP_HALT:
+                _VirtualMachine -> Halted = 1;
+
+                break;
+
+            default:
+                printf("Unknown opcode: %d\n", Instruction.Opcode);
+
+                _VirtualMachine -> Halted = 1;
+
+                break;
+        }
+    }
 }
 
 void PrintInstruction(BytecodeInstruction *Instruction, uint32_t Index) {
@@ -249,6 +655,6 @@ void DumpVirtualMachineState(VirtualMachine *_VirtualMachine) {
     printf("Registers:\n");
 
     for (uint16_t i = 0; i < Frame -> Function -> RegisterCount; i++) {
-        printf("  R%-3u = %llu\n", i, (uint64_t) Frame -> Registers[i]);
+        printf("  Register%-3u = %llu\n", i, (uint64_t) Frame -> Registers[i]);
     }
 }

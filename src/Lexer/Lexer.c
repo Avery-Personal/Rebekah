@@ -296,6 +296,14 @@ Token LexerNextToken(Lexer *_Lexer) {
         _Token.Length = _Lexer -> Cursor - Start - 1;
 
         _Token.Type = TOKEN_STRING_LITERAL;
+
+        char *Copy = malloc(_Token.Length + 1);
+
+        memcpy(Copy, _Token.Start, _Token.Length);
+
+        Copy[_Token.Length] = '\0';
+        
+        _Token.Literal.String = Copy;
     } else if (Character == '\'') {
         char Value = LexerNext(_Lexer);
 

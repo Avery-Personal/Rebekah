@@ -138,11 +138,13 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             IRValue *Temp = IRCreateTemp(IR_TYPE_INT);
 
             if (Expression -> Literal.String) {
-                Temp -> Kind = VALUE_CONST;
                 Temp -> Type = IR_TYPE_PTR;
-                Temp -> Label = Expression -> Literal.String;
+
+                IRInstruction *Instruction = IRCreateConstInst(Temp, (int64_t)(uintptr_t) Expression -> Literal.String);
+
+                IRAddInstruction(Context -> CurrentFunction, Instruction);
             } else {
-                IRInstruction *Instruction = IRCreateConstInst(Temp, Expression -> Literal.Int);
+                IRInstruction *Instruction = IRCreateConstInst(Temp, (int64_t) Expression -> Literal.Number);
 
                 IRAddInstruction(Context -> CurrentFunction, Instruction);
             }
@@ -221,9 +223,9 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             
             const char *FunctionName = ExtractName(Expression -> Call.Callee -> Identifier);
 
-            if (strcmp(FunctionName, "output") == 0) {
-                FunctionName = MangleOutputName(Expression -> Call.Args, Expression -> Call.ArgCount);
-            }
+            //if (strcmp(FunctionName, "output") == 0) {
+            //    FunctionName = MangleOutputName(Expression -> Call.Args, Expression -> Call.ArgCount);
+            //}
             
             IRValue *Result = IRCreateTemp(IR_TYPE_INT);
             IRInstruction *Call = IRCreateCall(Result, FunctionName, Args, Expression -> Call.ArgCount);

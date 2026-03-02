@@ -35,8 +35,17 @@ typedef enum {
     BC_OP_CALL,
     BC_OP_RET,
 
+    BC_OP_PRINT,
+
     BC_OP_HALT
 } Opcodes;
+
+typedef enum {
+    FUNCTION_BYTECODE,
+    FUNCTION_NATIVE
+} FunctionType;
+
+typedef void (*NativeFunction)(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount);
 
 typedef struct {
     IRValue *Value;
@@ -51,25 +60,53 @@ typedef struct {
 } LabelEntry;
 
 typedef struct {
+    const char *Name;
+
+    NativeFunction Function;
+    FunctionType Type;
+
+    uint16_t ArgumentCount;
+} NativeFunctionEntry;
+
+typedef struct {
+    const char *FunctionName;
+
+    uint32_t InstructionIndex;
+
+    uint8_t *ArgumentTypes;
+    uint16_t ArgumentCount;
+} CallArgumentInfo;
+
+typedef struct {
     uint8_t Opcode;
 
-    uint8_t A, B, C;
+    uint16_t A, B, C;
 } BytecodeInstruction;
 
 typedef struct {
+    const char *Name;
+
     BytecodeInstruction *Code;
     uint32_t InstructionCount;
 
     uint64_t *Constants;
     uint32_t ConstantCount;
 
+    CallArgumentInfo *CallArguments;
+    uint32_t CallArgumentCount;
+
     uint16_t RegisterCount;
     uint16_t ArgumentCount;
+
+    uint16_t GlobalCount;
 } BytecodeFunction;
 
 typedef struct {
     BytecodeFunction **Functions;
     uint32_t FunctionCount;
+
+    NativeFunctionEntry *Natives;
+    uint32_t NativeCount;
 
     uint32_t GlobalCount;
     uint32_t EntryFunction;
@@ -77,11 +114,14 @@ typedef struct {
 
 typedef struct VirtualFrame {
     uint64_t *Registers;
+    uint16_t ReturnRegister;
 
     struct VirtualFrame *Caller;
     BytecodeFunction *Function;
     
     size_t InstructionPointer;
+
+    uint64_t *Globals;
 } VirtualFrame;
 
 typedef struct {
@@ -102,6 +142,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction);
 BytecodeProgram *LowerProgram(IRProgram *Program);
 
 VirtualMachine *VirtualMachineCreate(BytecodeProgram *Program);
+static VirtualFrame *VirtualMachineCreateFrame(VirtualMachine *_VirtualMachine, BytecodeFunction *Function, VirtualFrame *Caller);
+static void VirtualMachineDestroyFrame(VirtualMachine *_VirtualMachine);
+void VirtualMachineExecute(VirtualMachine *_VirtualMachine);
 
 void PrintInstruction(BytecodeInstruction *Instruction, uint32_t Index);
 void PrintFunction(BytecodeFunction *Function, uint32_t Index);
