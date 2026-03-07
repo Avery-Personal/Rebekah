@@ -157,6 +157,15 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
         TraceToken("Matched LPAREN", _Parser);
 
         while (!ParserCheck(_Parser, TOKEN_RPAREN) && !ParserCheck(_Parser, TOKEN_EOF)) {
+            int ParamMutable = 0;
+            int ParamConstant = 0;
+
+            if (ParserMatch(_Parser, TOKEN_MUTABLE)) {
+                ParamMutable = 1;
+            } else if (ParserMatch(_Parser, TOKEN_CONSTANT)) {
+                ParamConstant = 1;
+            }
+
             if (!ParserMatch(_Parser, TOKEN_IDENTIFIER)) {
                 ParserError(_Parser, "expected parameter name");
 
@@ -181,6 +190,7 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
             
             Function -> Params[Function -> ParamCount].Name = ParamName;
             Function -> Params[Function -> ParamCount].Type = ParamType;
+            Function -> Params[Function -> ParamCount].Mutable = ParamMutable;
 
             Function -> ParamCount++;
 
@@ -225,32 +235,40 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
 ASTStatement *ParseStatement(Parser *_Parser) {
     TraceEnter("ParseStatement", _Parser);
     
-    if (ParserCheck(_Parser, TOKEN_IDENTIFIER) && ParserCheckNext(_Parser, TOKEN_ASSIGN)) {
+    if (ParserCheck(_Parser, TOKEN_IDENTIFIER)) {
+        if (ParserCheckNext(_Parser, TOKEN_COLON)) {
+            TraceToken("Detected variable declaration", _Parser);
+            TraceExit("ParseStatement", _Parser);
+
+            return ParseVariableDeclaration(_Parser, 0);
+        }
+
+        ASTExpression *Target = ParsePostfix(_Parser);
+
+        if (ParserMatch(_Parser, TOKEN_ASSIGN)) {
+            ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
+
+            Statement -> Kind = STMT_ASSIGN;
+
+            if (Target -> Kind != EXPR_IDENTIFIER && Target -> Kind != EXPR_INDEX) {
+                ParserError(_Parser, "invalid assignment target");
+                TraceExit("ParseStatement", _Parser);
+
+                return NULL;
+            }
+
+            Statement -> Assign.Target = Target;
+            Statement -> Assign.Value  = ParseExpression(_Parser);
+
+            TraceExit("ParseStatement", _Parser);
+
+            return Statement;
+        }
+
         ASTStatement *Statement = calloc(1, sizeof(ASTStatement));
-        ASTExpression *Target = ParsePrimary(_Parser);
 
-        Statement -> Kind = STMT_ASSIGN;
-
-        TraceToken("Detected assignment", _Parser);
-
-        if (Target -> Kind != EXPR_IDENTIFIER && Target -> Kind != EXPR_INDEX) {
-            ParserError(_Parser, "invalid assignment target");
-            TraceExit("ParseStatement", _Parser);
-
-            return NULL;
-        }
-
-        if (!ParserMatch(_Parser, TOKEN_ASSIGN)) {
-            ParserError(_Parser, "expected ':=' after target");
-            TraceExit("ParseStatement", _Parser);
-            
-            return NULL;
-        }
-        
-        ASTExpression *Value = ParseExpression(_Parser);
-
-        Statement -> Assign.Target = Target;
-        Statement -> Assign.Value  = Value;
+        Statement -> Kind = STMT_CALL;
+        Statement -> ExpressionStmt.Expression = ParseBinaryFromLeft(_Parser, Target, 0);
 
         TraceExit("ParseStatement", _Parser);
 
@@ -654,6 +672,31 @@ ASTExpression *ParseBinary(Parser *_Parser, int Precedence) {
     return Left;
 }
 
+ASTExpression *ParseBinaryFromLeft(Parser *_Parser, ASTExpression *Left, int Precedence) {
+    while (1) {
+        Token *OperatorToken = ParserPeek(_Parser);
+
+        int OperatorPrecedence = GetOperatorPrecedence(OperatorToken -> Type);
+        if (OperatorPrecedence <= 0 || OperatorPrecedence < Precedence)
+            break;
+
+        ParserAdvance(_Parser);
+
+        ASTExpression *Right = ParseBinary(_Parser, OperatorPrecedence + 1);
+        ASTExpression *BinaryExpression = calloc(1, sizeof(ASTExpression));
+
+        BinaryExpression -> Kind = EXPR_BINARY;
+
+        BinaryExpression -> Binary.Left = Left;
+        BinaryExpression -> Binary.Right = Right;
+        BinaryExpression -> Binary.Op = TokenToOperator(OperatorToken -> Type);
+
+        Left = BinaryExpression;
+    }
+
+    return Left;
+}
+
 ASTExpression *ParseUnary(Parser *_Parser) {
     TraceEnter("ParseUnary", _Parser);
     
@@ -683,6 +726,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     if (ParserMatch(_Parser, TOKEN_NUMBER)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Number = ParserPrevious(_Parser) -> Literal.Number;
+        Expression -> Literal.LiteralKind = TYPE_FLOAT;
 
         TraceToken("Matched NUMBER", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -691,6 +735,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_INTEGER)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Int = ParserPrevious(_Parser) -> Literal.Int;
+        Expression -> Literal.LiteralKind = TYPE_INT;
 
         TraceToken("Matched INTEGER", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -699,6 +744,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_BOOLEAN)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Bool = ParserCheckNext(_Parser, TOKEN_TRUE) ? 1 : 0;
+        Expression -> Literal.LiteralKind = TYPE_BOOL;
 
         TraceToken("Matched BOOLEAN", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -707,6 +753,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_STRING_LITERAL)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.String = ParserPrevious(_Parser) -> Literal.String;
+        Expression -> Literal.LiteralKind = TYPE_STRING;
 
         TraceToken("Matched STRING_LITERAL", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -715,6 +762,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_CHAR_LITERAL)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Char = (char) ParserPrevious(_Parser) -> Literal.Int;
+        Expression -> Literal.LiteralKind = TYPE_CHAR;
 
         TraceToken("Matched CHAR_LITERAL", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -723,6 +771,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_TRUE)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Bool = 1;
+        Expression -> Literal.LiteralKind = TYPE_BOOL;
 
         TraceToken("Matched TRUE", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -731,6 +780,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
     } else if (ParserMatch(_Parser, TOKEN_FALSE)) {
         Expression -> Kind = EXPR_LITERAL;
         Expression -> Literal.Bool = 0;
+        Expression -> Literal.LiteralKind = TYPE_BOOL;
 
         TraceToken("Matched FALSE", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -883,6 +933,11 @@ ASTExpression *ParsePostfix(Parser *_Parser) {
 
 ASTType *ParseType(Parser *_Parser) {
     ASTType *Type = calloc(1, sizeof(ASTType));
+
+    if (ParserMatch(_Parser, TOKEN_BOOLEAN)) {
+        Type -> Kind = TYPE_BOOL;
+        return Type;
+    }
 
     if (ParserMatch(_Parser, TOKEN_ARRAY)) {
         ParserMatch(_Parser, TOKEN_LT);

@@ -164,20 +164,21 @@ Symbol *LookupSymbolInCurrentScope(SemanticAnalyzer *Analyzer, const char *Name)
 
 int TypesEqual(ASTType *A, ASTType *B) {
     if (A == NULL || B == NULL) return A == B;
-    if (A -> Kind != B -> Kind) return 0;
     
-    switch (A -> Kind) {
-        case TYPE_ARRAY:
-            return TypesEqual(A -> ElementType, B -> ElementType);
-            
-        default:
-            if (A -> Name == NULL || B -> Name == NULL) return A -> Name == B -> Name;
+    if (A -> Kind == TYPE_ARRAY || B -> Kind == TYPE_ARRAY) {
+        if (A -> Kind != B -> Kind) return 0;
 
-            size_t LenA = GetTokenLength(A -> Name);
-            size_t LenB = GetTokenLength(B -> Name);
-
-            return StringsEqual(A -> Name, LenA, B -> Name, LenB);
+        return TypesEqual(A -> ElementType, B -> ElementType);
     }
+
+    if (A -> Name != NULL && B -> Name != NULL) {
+        size_t LenA = GetTokenLength(A -> Name);
+        size_t LenB = GetTokenLength(B -> Name);
+
+        return StringsEqual(A -> Name, LenA, B -> Name, LenB);
+    }
+
+    return A -> Kind == B -> Kind;
 }
 
 const char *TypeToString(ASTType *Type) {
@@ -186,25 +187,33 @@ const char *TypeToString(ASTType *Type) {
     static char Buffer[256];
     
     switch (Type -> Kind) {
-        case TYPE_ARRAY:
+        case TYPE_ARRAY: {
             const char *ElementString = TypeToString(Type -> ElementType);
-            char TempBuffer[256];
 
-            snprintf(TempBuffer, sizeof(TempBuffer), "%s", ElementString);
-            snprintf(Buffer, sizeof(Buffer), "Array<%s>", TempBuffer);
+            snprintf(Buffer, sizeof(Buffer), "Array<%s>", ElementString);
 
             return Buffer;
-            
+        }
+
         default:
             if (Type -> Name) {
                 size_t NameLen = GetTokenLength(Type -> Name);
 
-                snprintf(Buffer, sizeof(Buffer), "%.*s", (int)NameLen, Type -> Name);
+                snprintf(Buffer, sizeof(Buffer), "%.*s", (int) NameLen, Type -> Name);
 
                 return Buffer;
             }
 
-            return "Unknown";
+            switch (Type -> Kind) {
+                case TYPE_BOOL: return "Boolean";
+                case TYPE_INT: return "Integer";
+                case TYPE_FLOAT: return "Float";
+                case TYPE_CHAR: return "Char";
+                case TYPE_STRING: return "String";
+                case TYPE_VOID: return "void";
+
+                default: return "Unknown";
+            }
     }
 }
 
@@ -215,7 +224,14 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
         case EXPR_LITERAL: {
             ASTType *Type = calloc(1, sizeof(ASTType));
 
-            Type -> Name = "Integer";
+            switch (Expression -> Literal.LiteralKind) {
+                case TYPE_FLOAT: Type -> Name = "Float"; Type -> Kind = TYPE_FLOAT;  break;
+                case TYPE_BOOL: Type -> Name = "Boolean"; Type -> Kind = TYPE_BOOL; break;
+                case TYPE_STRING: Type -> Name = "String"; Type -> Kind = TYPE_STRING;  break;
+                case TYPE_CHAR: Type -> Name = "Char"; Type -> Kind = TYPE_CHAR; break;
+
+                default: Type -> Name = "Integer"; Type -> Kind = TYPE_INT; break;
+            }
             
             return Type;
         }
@@ -709,7 +725,7 @@ void AnalyzeSubprogram(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram) {
     
     for (size_t i = 0; i < Subprogram -> ParamCount; i++) {
         AnalyzeType(Analyzer, Subprogram -> Params[i].Type);
-        DeclareSymbol(Analyzer, SYMBOL_PARAM, Subprogram -> Params[i].Name, Subprogram -> Params[i].Type, 0);
+        DeclareSymbol(Analyzer, SYMBOL_PARAM, Subprogram -> Params[i].Name, Subprogram -> Params[i].Type, Subprogram -> Params[i].Mutable);
     }
     
     if (Subprogram -> ReturnType != NULL) {
@@ -729,15 +745,68 @@ void AnalyzeSubprogram(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram) {
     ExitScope(Analyzer);
 }
 
+void AnalyzeSubprogramBody(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram) {
+    if (Subprogram == NULL) return;
+
+    EnterScope(Analyzer);
+
+    for (size_t i = 0; i < Subprogram -> ParamCount; i++) {
+        AnalyzeType(Analyzer, Subprogram -> Params[i].Type);
+        DeclareSymbol(Analyzer, SYMBOL_PARAM, Subprogram -> Params[i].Name, Subprogram -> Params[i].Type, Subprogram -> Params[i].Mutable);
+    }
+
+    if (Subprogram -> ReturnType != NULL) {
+        AnalyzeType(Analyzer, Subprogram -> ReturnType);
+    }
+
+    ASTSubprogram *PreviousFunction = Analyzer -> CurrentFunction;
+
+    Analyzer -> CurrentFunction = Subprogram;
+
+    for (size_t i = 0; i < Subprogram -> BodyCount; i++) {
+        AnalyzeStatement(Analyzer, Subprogram -> Body[i]);
+    }
+
+    Analyzer -> CurrentFunction = PreviousFunction;
+
+    ExitScope(Analyzer);
+}
+
 int AnalyzeProgram(SemanticAnalyzer *Analyzer, ASTProgram *Program) {
     if (Program == NULL) return 0;
-    
+
     for (size_t i = 0; i < Program -> SubprogramCount; i++) {
-        AnalyzeSubprogram(Analyzer, Program -> Subprograms[i]);
+        ASTSubprogram *Subprogram = Program -> Subprograms[i];
+        SymbolKind Kind;
+
+        switch (Subprogram -> Kind) {
+            case TOKEN_METHOD: Kind = SYMBOL_METHOD; break;
+            case TOKEN_PROCEDURE: Kind = SYMBOL_PROCEDURE; break;
+
+            default: Kind = SYMBOL_FUNCTION; break;
+        }
+
+        DeclareSymbol(Analyzer, Kind, Subprogram -> Name, Subprogram -> ReturnType, 0);
     }
     
     for (size_t i = 0; i < Program -> StatementCount; i++) {
-        AnalyzeStatement(Analyzer, Program -> Statements[i]);
+        ASTStatement *Statement = Program -> Statements[i];
+
+        if (Statement -> Kind == STMT_VAR_DECL) {
+            AnalyzeStatement(Analyzer, Statement);
+        }
+    }
+
+    for (size_t i = 0; i < Program -> SubprogramCount; i++) {
+        AnalyzeSubprogramBody(Analyzer, Program -> Subprograms[i]);
+    }
+
+    for (size_t i = 0; i < Program -> StatementCount; i++) {
+        ASTStatement *Statement = Program -> Statements[i];
+
+        if (Statement -> Kind != STMT_VAR_DECL) {
+            AnalyzeStatement(Analyzer, Statement);
+        }
     }
     
     if (Analyzer -> ErrorCount > 0) {

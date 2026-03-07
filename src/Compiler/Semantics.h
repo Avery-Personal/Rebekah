@@ -46,6 +46,7 @@ void DestroySemanticAnalyzer(SemanticAnalyzer *Analyzer);
 
 int AnalyzeProgram(SemanticAnalyzer *Analyzer, ASTProgram *Program);
 void AnalyzeSubprogram(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram);
+void AnalyzeSubprogramBody(SemanticAnalyzer *Analyzer, ASTSubprogram *Subprogram);
 
 void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement);
 void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression);

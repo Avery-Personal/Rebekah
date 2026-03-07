@@ -252,22 +252,30 @@ Token LexerNextToken(Lexer *_Lexer) {
     } else if (IsDigit(Character) || (Character == '.' && IsDigit(LexerPeek(_Lexer)))) {
         size_t Start = _Lexer -> Cursor - 1;
 
+        int IsFloat = 0;
+
         while (IsDigit(LexerPeek(_Lexer)))
             LexerNext(_Lexer);
 
         if (LexerPeek(_Lexer) == '.') {
+            IsFloat = 1;
+
             LexerNext(_Lexer);
 
             while (IsDigit(LexerPeek(_Lexer)))
                 LexerNext(_Lexer);
         }
 
-        _Token.Start = _Lexer -> Source + Start;
+        _Token.Start  = _Lexer -> Source + Start;
         _Token.Length = _Lexer -> Cursor - Start;
 
-        _Token.Type = TOKEN_NUMBER;
-
-        _Token.Literal.Number = strtod(_Token.Start, NULL);
+        if (IsFloat) {
+            _Token.Type = TOKEN_NUMBER;
+            _Token.Literal.Number = strtod(_Token.Start, NULL);
+        } else {
+            _Token.Type = TOKEN_INTEGER;
+            _Token.Literal.Int = (uint64_t) strtoull(_Token.Start, NULL, 10);
+        }
     } else if (Character == '"') {
         size_t Start = _Lexer -> Cursor;
 

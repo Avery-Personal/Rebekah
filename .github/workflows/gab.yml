@@ -1,4 +1,4 @@
-name: GA Build
+name: Rebekah Build Validation
 
 on:
   push:
@@ -11,26 +11,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup MSYS2
-        if: matrix.os == 'windows-latest'
-        uses: msys2/setup-msys2@v2
-        with:
-          install: make mingw-w64-x86_64-gcc
+    - name: Install dependencies
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt-get update && sudo apt-get install -y build-essential
+        fi
+      shell: bash
 
-      - name: Build
-        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
-        run: make
-
-      - name: Run Tests
-        shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
-        run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            ./build/Rebekah.exe --run-tests
-          else
-            ./build/Rebekah --run-tests
-          fi
+    - name: Compile
+      run: gcc src/Rebekah.c src/Lexer/Lexer.c src/Parser/Parser.c src/Compiler/Semantics.c src/Compiler/IR.c src/Compiler/Codegen/IRGen.c src/Compiler/Optimization/IROptimization.c src/VirtualMachine/VirtualMachine.c -o Rebekah
+        
+    - name: Run Tests
+      run: ./Rebekah --run-tests

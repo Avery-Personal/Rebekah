@@ -44,6 +44,7 @@ ASTStatement *ParseReturnStatement(Parser *_Parser);
 
 ASTExpression *ParseExpression(Parser *_Parser);
 ASTExpression *ParseBinary(Parser *_Parser, int Precedence);
+ASTExpression *ParseBinaryFromLeft(Parser *_Parser, ASTExpression *Left, int Precedence);
 ASTExpression *ParseUnary(Parser *_Parser);
 ASTExpression *ParsePrimary(Parser *_Parser);
 ASTExpression *ParsePostfix(Parser *_Parser);

@@ -129,6 +129,8 @@ typedef struct ASTExpression {
             char Char;
 
             int Bool;
+
+            ASTTypeKind LiteralKind;
         } Literal;
 
         struct {
@@ -237,6 +239,8 @@ struct ASTSubprogram {
         const char *Name;
 
         ASTType *Type;
+
+        int Mutable;
     } *Params;
 
     size_t ParamCount;
