@@ -181,6 +181,7 @@ ASTSubprogram *ParseSubprogram(Parser *_Parser) {
             
             Function -> Params[Function -> ParamCount].Name = ParamName;
             Function -> Params[Function -> ParamCount].Type = ParamType;
+
             Function -> ParamCount++;
 
             if (!ParserMatch(_Parser, TOKEN_COMMA))
@@ -376,6 +377,69 @@ ASTStatement *ParseBlock(Parser *_Parser) {
     return Block;
 }
 
+ASTStatement *ParseControlBlock(Parser *_Parser) {
+    ASTStatement *Block = calloc(1, sizeof(ASTStatement));
+
+    Block -> Kind = STMT_BLOCK;
+
+    TraceEnter("ParseControlBlock", _Parser);
+
+    while (!ParserCheck(_Parser, TOKEN_END) && !ParserCheck(_Parser, TOKEN_ELSE) && !ParserCheck(_Parser, TOKEN_ELSEIF) && !ParserCheck(_Parser, TOKEN_EOF)) {
+        if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+            ASTSubprogram *Subprogram = ParseSubprogram(_Parser);
+
+            Block -> Block.Subprograms = realloc(Block -> Block.Subprograms, sizeof(ASTSubprogram*) * (Block -> Block.SubprogramCount + 1));
+            Block -> Block.Subprograms[Block -> Block.SubprogramCount++] = Subprogram;
+
+            continue;
+        }
+
+        ASTStatement *Statement = ParseStatement(_Parser);
+        if (Statement) {
+            Block -> Block.Statements = realloc(Block -> Block.Statements, sizeof(ASTStatement*) * (Block -> Block.Count + 1));
+            Block -> Block.Statements[Block -> Block.Count++] = Statement;
+        }
+
+        if (_Parser -> HasError)
+            break;
+    }
+
+    TraceExit("ParseControlBlock", _Parser);
+
+    return Block;
+}
+
+ASTStatement *ParseRepeatBody(Parser *_Parser) {
+    ASTStatement *Block = calloc(1, sizeof(ASTStatement));
+
+    Block -> Kind = STMT_BLOCK;
+
+    TraceEnter("ParseRepeatBody", _Parser);
+
+    while (!ParserCheck(_Parser, TOKEN_UNTIL) && !ParserCheck(_Parser, TOKEN_EOF)) {
+        if (ParserCheck(_Parser, TOKEN_METHOD) || ParserCheck(_Parser, TOKEN_PROCEDURE) || ParserCheck(_Parser, TOKEN_FUNCTION)) {
+            ASTSubprogram *Subprogram = ParseSubprogram(_Parser);
+
+            Block -> Block.Subprograms = realloc(Block -> Block.Subprograms, sizeof(ASTSubprogram*) * (Block -> Block.SubprogramCount + 1));
+            Block -> Block.Subprograms[Block -> Block.SubprogramCount++] = Subprogram;
+
+            continue;
+        }
+
+        ASTStatement *Statement = ParseStatement(_Parser);
+        if (Statement) {
+            Block -> Block.Statements = realloc(Block -> Block.Statements, sizeof(ASTStatement*) * (Block -> Block.Count + 1));
+            Block -> Block.Statements[Block -> Block.Count++] = Statement;
+        }
+
+        if (_Parser -> HasError) break;
+    }
+
+    TraceExit("ParseRepeatBody", _Parser);
+
+    return Block;
+}
+
 ASTStatement *ParseVariableDeclaration(Parser *_Parser, int Mutability) {
     ASTStatement *Variable = calloc(1, sizeof(ASTStatement));
 
@@ -424,12 +488,41 @@ ASTStatement *ParseIfStatement(Parser *_Parser) {
 
     ParserMatch(_Parser, TOKEN_THEN);
 
-    ASTStatement *ThenBlock = ParseBlock(_Parser);
+    ASTStatement *ThenBlock = ParseControlBlock(_Parser);
 
     If -> If.ThenBlock = ThenBlock -> Block.Statements;
     If -> If.ThenCount = ThenBlock -> Block.Count;
 
     free(ThenBlock);
+    
+    while (ParserMatch(_Parser, TOKEN_ELSEIF)) {
+        ASTExpression *ElseIfCond = ParseExpression(_Parser);
+
+        ParserMatch(_Parser, TOKEN_THEN);
+
+        ASTStatement *ElseIfBlock = ParseControlBlock(_Parser);
+
+        If -> If.ElseIfs = realloc(If -> If.ElseIfs, sizeof(*If -> If.ElseIfs) * (If -> If.ElseIfCount + 1));
+
+        If -> If.ElseIfs[If -> If.ElseIfCount].Condition = ElseIfCond;
+        If -> If.ElseIfs[If -> If.ElseIfCount].Block     = ElseIfBlock -> Block.Statements;
+        If -> If.ElseIfs[If -> If.ElseIfCount].Count     = ElseIfBlock -> Block.Count;
+
+        If -> If.ElseIfCount++;
+
+        free(ElseIfBlock);
+    }
+
+    if (ParserMatch(_Parser, TOKEN_ELSE)) {
+        ASTStatement *ElseBlock = ParseControlBlock(_Parser);
+
+        If -> If.ElseBlock = ElseBlock -> Block.Statements;
+        If -> If.ElseCount = ElseBlock -> Block.Count;
+
+        free(ElseBlock);
+    }
+
+    ParserMatch(_Parser, TOKEN_END);
 
     return If;
 }
@@ -442,23 +535,26 @@ ASTStatement *ParseWhileStatement(Parser *_Parser) {
 
     ParserMatch(_Parser, TOKEN_DO);
 
-    ASTStatement *Body = ParseBlock(_Parser);
+    ASTStatement *Body = ParseControlBlock(_Parser);
 
-    While -> While.Body = Body -> Block.Statements;
+    While -> While.Body  = Body -> Block.Statements;
     While -> While.Count = Body -> Block.Count;
 
     free(Body);
+
+    ParserMatch(_Parser, TOKEN_END);
 
     return While;
 }
 
 ASTStatement *ParseRepeatStatement(Parser *_Parser) {
     ASTStatement *Repeat = calloc(1, sizeof(ASTStatement));
-    ASTStatement *Body = ParseBlock(_Parser);
 
     Repeat -> Kind = STMT_REPEAT;
 
-    Repeat -> Repeat.Body = Body -> Block.Statements;
+    ASTStatement *Body = ParseRepeatBody(_Parser);
+
+    Repeat -> Repeat.Body  = Body -> Block.Statements;
     Repeat -> Repeat.Count = Body -> Block.Count;
 
     free(Body);
@@ -482,20 +578,29 @@ ASTStatement *ParseForStatement(Parser *_Parser) {
     }
 
     For -> For.Iterator = ParserPrevious(_Parser) -> Start;
-    ParserMatch(_Parser, TOKEN_ASSIGN);
+
+    if (!ParserMatch(_Parser, TOKEN_IN)) {
+        ParserError(_Parser, "expected 'in' after iterator name");
+
+        return For;
+    }
 
     For -> For.Start = ParseExpression(_Parser);
+
     ParserMatch(_Parser, TOKEN_DOT_DOT);
 
     For -> For.End = ParseExpression(_Parser);
+
     ParserMatch(_Parser, TOKEN_DO);
 
-    ASTStatement *Body = ParseBlock(_Parser);
+    ASTStatement *Body = ParseControlBlock(_Parser);
 
-    For -> For.Body = Body -> Block.Statements;
+    For -> For.Body  = Body -> Block.Statements;
     For -> For.Count = Body -> Block.Count;
 
     free(Body);
+
+    ParserMatch(_Parser, TOKEN_END);
 
     return For;
 }
@@ -593,7 +698,7 @@ ASTExpression *ParsePrimary(Parser *_Parser) {
         return Expression;
     } else if (ParserMatch(_Parser, TOKEN_BOOLEAN)) {
         Expression -> Kind = EXPR_LITERAL;
-        Expression -> Literal.Bool = ParserPrevious(_Parser) -> Literal.Int;
+        Expression -> Literal.Bool = ParserCheckNext(_Parser, TOKEN_TRUE) ? 1 : 0;
 
         TraceToken("Matched BOOLEAN", _Parser);
         TraceExit("ParsePrimary", _Parser);
@@ -846,7 +951,7 @@ void ParserError(Parser *_Parser, const char *Message) {
     int Column  = _Parser -> Current -> Column;
 
     if (Line == PreviousLine && Column == PreviousColumn || ParserCheck(_Parser, TOKEN_EOF)) {
-        exit(0);
+        ParserAdvance(_Parser);
     }
 
     PreviousLine = Line;

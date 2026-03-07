@@ -1,0 +1,11 @@
+method Main is
+begin
+    MUTABLE Counter : Integer = 0
+    CONST Limit : Integer = 5
+
+    for i in 1 .. Limit do
+        Counter := Counter + 1
+    end
+
+    output("Final Counter Value: ", Counter)
+end Main

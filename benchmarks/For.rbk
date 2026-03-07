@@ -1,0 +1,6 @@
+method Main is
+begin
+    for i in 0 .. 100000000 do
+
+    end
+end Main

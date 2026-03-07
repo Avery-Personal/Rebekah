@@ -1,0 +1,10 @@
+method Main is
+begin
+    MUTABLE Sum : Integer = 0
+
+    for i in 0 .. 100000000 do
+        Sum = Sum + i
+    end
+
+    output("Sum:", Sum)
+end Main

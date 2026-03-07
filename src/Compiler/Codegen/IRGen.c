@@ -396,39 +396,38 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
             IRValue *Start = GenerateExpression(Context, Statement -> For.Start);
 
             IRAddInstruction(Context -> CurrentFunction, IRCreateStore(Iterator, Start));
-            IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(CondLabel));
 
             IRValue *End = GenerateExpression(Context, Statement -> For.End);
+            IRValue *One = IRCreateTemp(IR_TYPE_INT);
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(One, 1));
+            IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(CondLabel));
+
             IRValue *IterVal = IRCreateTemp(IR_TYPE_INT);
 
             IRAddInstruction(Context -> CurrentFunction, IRCreateLoad(IterVal, Iterator));
-            
+
             IRValue *Cond = IRCreateTemp(IR_TYPE_INT);
 
             IRAddInstruction(Context -> CurrentFunction, IRCreateBinary(Cond, IterVal, End, IR_LE));
             IRAddInstruction(Context -> CurrentFunction, IRCreateIfFalseJump(Cond, EndLabel));
-            
             IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(BodyLabel));
 
-            for (size_t i = 0; i < Statement -> For.Count; i++) {
+            for (size_t i = 0; i < Statement -> For.Count; i++)
                 GenerateStatement(Context, Statement -> For.Body[i]);
-            }
-            
+
             IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(IncrLabel));
 
             IRValue *IterVal2 = IRCreateTemp(IR_TYPE_INT);
 
             IRAddInstruction(Context -> CurrentFunction, IRCreateLoad(IterVal2, Iterator));
 
-            IRValue *One = IRCreateConst(1);
             IRValue *Incr = IRCreateTemp(IR_TYPE_INT);
-            IRInstruction *Inc = IRCreateConstInst(One, 1);
 
-            IRAddInstruction(Context -> CurrentFunction, Inc);
             IRAddInstruction(Context -> CurrentFunction, IRCreateBinary(Incr, IterVal2, One, IR_ADD));
             IRAddInstruction(Context -> CurrentFunction, IRCreateStore(Iterator, Incr));
             IRAddInstruction(Context -> CurrentFunction, IRCreateJump(CondLabel));
-            
+
             IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(EndLabel));
             
             Context -> BreakLabel = OldBreak;

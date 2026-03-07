@@ -4,6 +4,10 @@
 
 #include "Semantics.h"
 
+ASTType *INTEGER_TYPE;
+ASTType *VOID_TYPE;
+ASTType *ANY_TYPE;
+
 static int StringsEqual(const char *A, size_t LenA, const char *B, size_t LenB) {
     if (A == NULL || B == NULL) return A == B;
     if (LenA != LenB) return 0;
@@ -15,20 +19,7 @@ static size_t GetTokenLength(const char *String) {
     if (String == NULL) return 0;
     
     size_t Len = 0;
-    while (String[Len] != '\0' && 
-           String[Len] != ' ' && 
-           String[Len] != '\t' && 
-           String[Len] != '\n' && 
-           String[Len] != '\r' &&
-           String[Len] != '(' &&
-           String[Len] != ')' &&
-           String[Len] != '[' &&
-           String[Len] != ']' &&
-           String[Len] != '<' &&
-           String[Len] != '>' &&
-           String[Len] != ',' &&
-           String[Len] != ':' &&
-           String[Len] != ';') {
+    while (String[Len] != '\0' && String[Len] != ' ' && String[Len] != '\t' && String[Len] != '\n' && String[Len] != '\r' && String[Len] != '(' && String[Len] != ')' && String[Len] != '[' && String[Len] != ']' && String[Len] != '<' && String[Len] != '>' && String[Len] != ',' && String[Len] != ':' && String[Len] != ';') {
         Len++;
     }
     
@@ -47,11 +38,16 @@ SemanticAnalyzer *CreateSemanticAnalyzer(void) {
     
     EnterScope(Analyzer);
 
-    ASTType *VoidType = calloc(1, sizeof(ASTType));
+    VOID_TYPE = calloc(1, sizeof(ASTType));
+    INTEGER_TYPE = calloc(1, sizeof(ASTType));
+    ANY_TYPE = calloc(1, sizeof(ASTType));
 
-    VoidType -> Name = "void";
+    VOID_TYPE -> Name = "void";
+    INTEGER_TYPE -> Name = "Integer";
+    ANY_TYPE -> Name = "Any";
 
-    DeclareSymbol(Analyzer, SYMBOL_FUNCTION, "output", VoidType, 0);
+    DeclareSymbol(Analyzer, SYMBOL_FUNCTION, "output", VOID_TYPE, 0);
+    DeclareSymbol(Analyzer, SYMBOL_FUNCTION, "input", ANY_TYPE, 0);
     
     return Analyzer;
 }
@@ -245,7 +241,7 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
             ASTType *RightType = GetExpressionType(Analyzer, Expression -> Binary.Right);
             
             if (LeftType == NULL || RightType == NULL) return NULL;
-            if (!TypesEqual(LeftType, RightType)) {
+            if (!TypesEqual(LeftType, RightType) && RightType != ANY_TYPE) {
                 char ErrorMsg[256];
 
                 snprintf(ErrorMsg, sizeof(ErrorMsg), "type mismatch in binary operation: '%s' and '%s'", TypeToString(LeftType), TypeToString(RightType));
@@ -394,9 +390,14 @@ void AnalyzeExpression(SemanticAnalyzer *Analyzer, ASTExpression *Expression) {
                 Symbol *_Symbol = LookupSymbol(Analyzer, Expression -> Call.Callee -> Identifier);
 
                 if (_Symbol != NULL && (_Symbol -> Kind == SYMBOL_FUNCTION || _Symbol -> Kind == SYMBOL_METHOD || _Symbol -> Kind == SYMBOL_PROCEDURE)) {
-                    // Uh this needs sum specific in here, prob do after the compiler
+                    if (StringsEqual(_Symbol -> Name, GetTokenLength(_Symbol -> Name), "input", 5)) {
+                        if (Expression -> Call.ArgCount > 1) {
+                            SemanticError(Analyzer, "input() takes at most 1 argument");
+                        }
+                    }
                 }
             }
+
             break;
         }
         
@@ -431,7 +432,7 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 AnalyzeExpression(Analyzer, Statement -> VarDecl.Initializer);
                 
                 ASTType *InitializerType = GetExpressionType(Analyzer, Statement -> VarDecl.Initializer);
-                if (InitializerType != NULL && !TypesEqual(Statement -> VarDecl.Type, InitializerType)) {
+                if (InitializerType != NULL && !TypesEqual(Statement -> VarDecl.Type, InitializerType) && InitializerType != ANY_TYPE) {
                     char ExpectedType[256];
                     char ActualType[256];
 

@@ -146,6 +146,7 @@ TokenType ResolveIdentifier(const char* Start, size_t Len) {
     if (Len == 4 && memcmp(Start, "true", 4) == 0) return TOKEN_TRUE;
     if (Len == 5 && memcmp(Start, "false", 5) == 0) return TOKEN_FALSE;
     if (Len == 2 && memcmp(Start, "if", 2) == 0) return TOKEN_IF;
+    if (Len == 2 && memcmp(Start, "in", 2) == 0) return TOKEN_IN;
     if (Len == 3 && memcmp(Start, "and", 3) == 0) return TOKEN_AND;
     if (Len == 2 && memcmp(Start, "or", 2) == 0) return TOKEN_OR;
     if (Len == 3 && memcmp(Start, "not", 3) == 0) return TOKEN_NOT;
@@ -302,7 +303,7 @@ Token LexerNextToken(Lexer *_Lexer) {
         memcpy(Copy, _Token.Start, _Token.Length);
 
         Copy[_Token.Length] = '\0';
-        
+
         _Token.Literal.String = Copy;
     } else if (Character == '\'') {
         char Value = LexerNext(_Lexer);
@@ -327,6 +328,7 @@ Token LexerNextToken(Lexer *_Lexer) {
                 }
                 
                 break;
+
             case '*': _Token.Type = TOKEN_STAR; break;
             case '/': 
                 if (LexerPeek(_Lexer) == '/') {
@@ -350,6 +352,7 @@ Token LexerNextToken(Lexer *_Lexer) {
                 }
             
                 break;
+
             case '#': _Token.Type = TOKEN_HASH; break;
             case '|':
                 if (LexerPeek(_Lexer) == '=') {
@@ -361,6 +364,7 @@ Token LexerNextToken(Lexer *_Lexer) {
                 }
                 
                 break;
+                
             case '?': _Token.Type = TOKEN_QUESTION; break;
             case '=':
                 if (LexerPeek(_Lexer) == '=') {
@@ -374,6 +378,17 @@ Token LexerNextToken(Lexer *_Lexer) {
                 break;
 
             case '~': _Token.Type = TOKEN_BIT_NOT; break;
+            case '!':
+                if (LexerPeek(_Lexer) == '=') {
+                    LexerNext(_Lexer);
+                    
+                    _Token.Type = TOKEN_NE;
+                } else if (LexerPeek(_Lexer) != '=') {
+                    LexerErrorAt(_Lexer, "standalone '!', expected '!='");
+                }
+
+                break;
+
             case '<':
                 if (LexerPeek(_Lexer) == '<') {
                     LexerNext(_Lexer);

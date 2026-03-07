@@ -163,6 +163,7 @@ A pseudocode example of it, if you don't understand would be like so:
 y = 0
 
 for i = 3, i < 0 do
+    i = i - 1
     y = y + 1
 end
 ```

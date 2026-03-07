@@ -27,6 +27,10 @@ typedef enum {
     BC_OP_CMP_GT,
     BC_OP_CMP_LE,
     BC_OP_CMP_GE,
+    
+    BC_OP_AND,
+    BC_OP_OR,
+    BC_OP_NOT,
 
     BC_OP_JMP,
     BC_OP_JMP_IF,
@@ -45,7 +49,7 @@ typedef enum {
     FUNCTION_NATIVE
 } FunctionType;
 
-typedef void (*NativeFunction)(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount);
+typedef uint64_t (*NativeFunction)(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount);
 
 typedef struct {
     IRValue *Value;
