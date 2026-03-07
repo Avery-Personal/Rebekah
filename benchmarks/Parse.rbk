@@ -1,12 +1,15 @@
 procedure Log(Str : String) is
+begin
     output(Str)
 end Log
 
 function Sum(A : Float, B : Float) -> Float is
+begin
     return A + B
 end Sum
 
 function Multiply(A : Float, B : Float) -> Float is
+begin
     return A * B
 end Sum
 
@@ -30,11 +33,11 @@ begin
     Loops : Integer = 5
 
     if x * y < z then
-        print($"{x} * {y} LESS than {z}")
+        output("x * y LESS than z")
     elseif x * y > z then
-        print($"{x} * {y} GREATER than {z}")
+        output("x * y GREATER than z")
     else
-        print($"{x} * {y} IS {z}")
+        output("x * y IS z")
     end
 
     for i in 0 .. Loops - 1 do
@@ -48,6 +51,4 @@ begin
 
         Count := Count + 1
     end
-
-    Log(IO.ToString(Multiply(Sum(4, 9), Multiply(Multiply(7, 1.8), Sum(0, 2.5)))))
 end Main
