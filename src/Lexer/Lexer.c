@@ -405,11 +405,6 @@ Token LexerNextToken(Lexer *_Lexer) {
                 break;
 
             case '>':
-                //if (LexerPeek(_Lexer) == '>') {
-                //    LexerNext(_Lexer);
-
-                //    _Token.Type = TOKEN_SHIFT_RIGHT;                
-                //} else 
                 if (LexerPeek(_Lexer) == '=') {
                     LexerNext(_Lexer);
                     
