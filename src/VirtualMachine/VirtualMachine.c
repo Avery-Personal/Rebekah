@@ -156,6 +156,10 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
 
     size_t ByteIndex = 0;
 
+    for (size_t i = 0; i < _IRFunction -> ParamCount; i++) {
+        AssignRegister(_IRFunction -> Params[i], RegisterMap, &RegisterMapCount, &NextRegister);
+    }
+
     for (size_t i = 0; i < _IRFunction -> InstructionCount; i++) {
         IRInstruction *Instruction = _IRFunction -> Instructions[i];
 
@@ -186,6 +190,16 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
                 uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
 
                 int GlobalIndex = -1;
+
+                if (Variable -> Kind == VALUE_PARAM) {
+                    uint16_t ParameterRegister = AssignRegister(Variable, RegisterMap, &RegisterMapCount, &NextRegister);
+
+                    Output -> Opcode = BC_OP_MOV;
+                    Output -> A = ParameterRegister;
+                    Output -> B = Source;
+
+                    break;
+                }
 
                 for (size_t i = 0; i < GlobalVariableCount; i++) {
                     if (GlobalVariables[i] == Variable) {
@@ -233,6 +247,16 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
                 uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
 
                 int GlobalIndex = -1;
+
+                if (Variable -> Kind == VALUE_PARAM) {
+                    uint16_t ParameterRegister = AssignRegister(Variable, RegisterMap, &RegisterMapCount, &NextRegister);
+
+                    Output -> Opcode = BC_OP_MOV;
+                    Output -> A = Destination;
+                    Output -> B = ParameterRegister;
+
+                    break;
+                }
 
                 for (size_t i = 0; i < GlobalVariableCount; i++) {
                     if (GlobalVariables[i] == Variable) {

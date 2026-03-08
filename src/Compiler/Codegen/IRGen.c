@@ -175,13 +175,11 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             if (Expression -> Literal.String) {
                 Temp -> Type = IR_TYPE_PTR;
 
-                IRInstruction *Instruction = IRCreateConstInst(Temp, (int64_t)(uintptr_t) Expression -> Literal.String);
-
-                IRAddInstruction(Context -> CurrentFunction, Instruction);
+                IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t)(uintptr_t) Expression -> Literal.String));
+            } else if (Expression -> Literal.LiteralKind == TYPE_INT) {
+                IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t) Expression -> Literal.Int));
             } else {
-                IRInstruction *Instruction = IRCreateConstInst(Temp, (int64_t) Expression -> Literal.Number);
-
-                IRAddInstruction(Context -> CurrentFunction, Instruction);
+                IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t) Expression -> Literal.Number));
             }
 
             return Temp;
@@ -578,6 +576,9 @@ void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
         IRValue *Parameter = IRCreateVar(Subprogram -> Params[i].Name, IR_TYPE_INT);
 
         Parameter -> Kind = VALUE_PARAM;
+
+        Function -> Params = realloc(Function -> Params, sizeof(IRValue *) * (Function -> ParamCount + 1));
+        Function -> Params[Function -> ParamCount++] = Parameter;
 
         DeclareVariable(Context, Subprogram -> Params[i].Name, Parameter);
     }

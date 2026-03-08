@@ -310,6 +310,7 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
 
             if (TargetType -> Kind != TYPE_ARRAY) {
                 SemanticError(Analyzer, "cannot index non-array type");
+
                 return NULL;
             }
             
@@ -474,7 +475,7 @@ void AnalyzeStatement(SemanticAnalyzer *Analyzer, ASTStatement *Statement) {
                 if (_Symbol != NULL && !_Symbol -> Mutable) {
                     char ErrorMsg[256];
 
-                    size_t NameLen = GetTokenLength(Statement->Assign.Target->Identifier);
+                    size_t NameLen = GetTokenLength(Statement -> Assign.Target -> Identifier);
 
                     snprintf(ErrorMsg, sizeof(ErrorMsg), "cannot assign to immutable variable '%.*s'", (int) NameLen, Statement -> Assign.Target -> Identifier);
                     SemanticError(Analyzer, ErrorMsg);

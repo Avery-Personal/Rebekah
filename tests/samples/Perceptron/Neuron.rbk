@@ -27,7 +27,7 @@ begin
 
     Error := ExpectedOutput - Output
     if Error != 0.0 then
-        ErrorOccurred = true
+        ErrorOccurred := true
     end
 
     output("Expected output:", ExpectedOutput)
@@ -81,9 +81,11 @@ begin
             output("Inputs:", Inputs[i])
             output("Bias:", Bias)
             output("Output:", OutputValue)
+
+            output("====================")
         end
 
-        output("====================")
+        output()
 
         Epoch := Epoch + 1
     until
