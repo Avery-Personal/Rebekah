@@ -327,19 +327,46 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
         }
         
         case STMT_IF: {
-            const char *ThenLabel = GenerateLabel(Context, "if_then");
             const char *EndLabel = GenerateLabel(Context, "if_end");
-            
-            IRValue *Cond = GenerateExpression(Context, Statement -> If.Condition);
-            IRInstruction *Branch = IRCreateIfFalseJump(Cond, EndLabel);
 
-            IRAddInstruction(Context -> CurrentFunction, Branch);
-            IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(ThenLabel));
+            IRValue *Condition = GenerateExpression(Context, Statement -> If.Condition);
+
+            const char *NextLabel = (Statement -> If.ElseIfCount > 0 || Statement -> If.ElseCount > 0) ? GenerateLabel(Context, "if_next") : EndLabel;
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateIfFalseJump(Condition, NextLabel));
 
             for (size_t i = 0; i < Statement -> If.ThenCount; i++) {
                 GenerateStatement(Context, Statement -> If.ThenBlock[i]);
             }
-            
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateJump(EndLabel));
+
+            for (size_t i = 0; i < Statement -> If.ElseIfCount; i++) {
+                IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(NextLabel));
+
+                const char *NextNext = (i + 1 < Statement -> If.ElseIfCount || Statement -> If.ElseCount > 0) ? GenerateLabel(Context, "if_next") : EndLabel;
+
+                IRValue *ElseIfCondition = GenerateExpression(Context, Statement -> If.ElseIfs[i].Condition);
+
+                IRAddInstruction(Context -> CurrentFunction, IRCreateIfFalseJump(ElseIfCondition, NextNext));
+
+                for (size_t i = 0; i < Statement -> If.ElseIfs[i].Count; i++) {
+                    GenerateStatement(Context, Statement -> If.ElseIfs[i].Block[i]);
+                }
+
+                IRAddInstruction(Context -> CurrentFunction, IRCreateJump(EndLabel));
+
+                NextLabel = NextNext;
+            }
+
+            if (Statement -> If.ElseCount > 0) {
+                IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(NextLabel));
+
+                for (size_t i = 0; i < Statement -> If.ElseCount; i++) {
+                    GenerateStatement(Context, Statement -> If.ElseBlock[i]);
+                }
+            }
+
             IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(EndLabel));
 
             break;
@@ -435,6 +462,33 @@ void GenerateStatement(IRGenContext *Context, ASTStatement *Statement) {
 
             break;
         }
+
+        case STMT_REPEAT: {
+            const char *BodyLabel = GenerateLabel(Context, "repeat_body");
+            const char *EndLabel  = GenerateLabel(Context, "repeat_end");
+
+            const char *OldBreak = Context -> BreakLabel;
+            const char *OldContinue = Context -> ContinueLabel;
+
+            Context -> BreakLabel = EndLabel;
+            Context -> ContinueLabel = BodyLabel;
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(BodyLabel));
+
+            for (size_t i = 0; i < Statement -> Repeat.Count; i++) {
+                GenerateStatement(Context, Statement -> Repeat.Body[i]);
+            }
+
+            IRValue *Until = GenerateExpression(Context, Statement -> Repeat.Until);
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateIfFalseJump(Until, BodyLabel));
+            IRAddInstruction(Context -> CurrentFunction, IRCreateLabel(EndLabel));
+
+            Context -> BreakLabel = OldBreak;
+            Context -> ContinueLabel = OldContinue;
+
+            break;
+        }
         
         case STMT_RETURN: {
             IRValue *ReturnValue = NULL;
@@ -519,15 +573,19 @@ IRProgram *GenerateIR(ASTProgram *Program) {
     }
     
     if (Program -> StatementCount > 0) {
-        IRFunction *MainFunc = IRCreateFunction("_start", IR_TYPE_VOID);
+        IRFunction *MainFunction = IRCreateFunction("_start", IR_TYPE_VOID);
 
-        Context -> CurrentFunction = MainFunc;
+        Context -> CurrentFunction = MainFunction;
+
+        for (size_t i = 0; i < Program -> StatementCount; i++) {
+            DeclareVariablesInStatement(Context, Program -> Statements[i]);
+        }
         
         for (size_t i = 0; i < Program -> StatementCount; i++) {
             GenerateStatement(Context, Program -> Statements[i]);
         }
         
-        IRAddFunction(Context -> Program, MainFunc);
+        IRAddFunction(Context -> Program, MainFunction);
     }
     
     IRProgram *Result = Context -> Program;
