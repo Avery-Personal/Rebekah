@@ -96,6 +96,9 @@ void StartREPL() {
 }
 
 #ifndef _WIN32
+    #include <dirent.h>
+    #include <sys/stat.h>
+
     static char *RunTestFile(const char *Path, const char *Binary) {
         char Command[MAX_PATH * 2];
 
