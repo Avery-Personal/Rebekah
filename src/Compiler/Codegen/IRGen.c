@@ -626,6 +626,21 @@ IRProgram *GenerateIR(ASTProgram *Program) {
             GenerateStatement(Context, Program -> Statements[i]);
         }
 
+        for (size_t i = 0; i < Program -> SubprogramCount; i++) {
+            const char *Name = ExtractName(Program -> Subprograms[i] -> Name);
+
+            if (strcmp(Name, "Main") == 0 || strcmp(Name, "main") == 0) {
+                IRValue *Result = IRCreateTemp(IR_TYPE_INT);
+                IRValue **Arguments = NULL;
+
+                IRInstruction *Call = IRCreateCall(Result, "Main", Arguments, 0);
+
+                IRAddInstruction(MainFunction, Call);
+
+                break;
+            }
+        }
+
         IRInstruction *Halt = calloc(1, sizeof(IRInstruction));
 
         Halt -> Op = IR_RETURN;
