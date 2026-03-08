@@ -1,0 +1,16 @@
+method Main is
+begin
+    MUTABLE X : Integer = 10
+
+    if X > 5 then
+        output("Branch:", "greater")
+    else
+        output("Branch:", "not greater")
+    end
+
+    if X == 99 then
+        output("Exact:", "yes")
+    end
+
+    output("Done:", true)
+end Main

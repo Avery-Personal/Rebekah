@@ -1,0 +1,11 @@
+method Main is
+begin
+    MUTABLE A : Integer = 10
+    MUTABLE B : Integer = 3
+
+    output("Add:", A + B)
+    output("Sub:", A - B)
+    output("Mul:", A * B)
+    output("Div:", A / B)
+    output("Precedence:", A + B * 2)
+end Main

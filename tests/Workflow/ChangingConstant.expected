@@ -1,0 +1,3 @@
+[Semantic Error] cannot assign to immutable variable 'X'
+
+Semantic analysis failed with 1 error(s)

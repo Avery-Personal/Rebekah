@@ -1,0 +1,16 @@
+method Main is
+begin
+    MUTABLE Numbers : Array<Integer> = [10, 20, 30, 40, 50]
+
+    output("First:", Numbers[0])
+    output("Last:", Numbers[4])
+
+    Numbers[2] := 99
+    output("Modified:", Numbers[2])
+
+    MUTABLE Sum : Integer = 0
+    for i in 0 .. 4 do
+        Sum := Sum + Numbers[i]
+    end
+    output("Sum:", Sum)
+end Main

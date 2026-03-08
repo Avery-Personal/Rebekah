@@ -1,0 +1,3 @@
+[Semantic Error] type mismatch in variable initialization: expected 'Integer', got 'Float'
+
+Semantic analysis failed with 1 error(s)

@@ -1,0 +1,9 @@
+function Add(A : Integer, B : Integer) -> Integer is
+begin
+    return A + B
+end Add
+
+method Main is
+begin
+    output("Result:", Add(1))
+end Main

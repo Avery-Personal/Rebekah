@@ -1,0 +1,9 @@
+method Main is
+begin
+    MUTABLE A : Float = 0.0
+    MUTABLE B : Float = 1.5
+    MUTABLE C : Float = 3.14
+    output("A:", A)
+    output("B:", B)
+    output("C:", C)
+end Main

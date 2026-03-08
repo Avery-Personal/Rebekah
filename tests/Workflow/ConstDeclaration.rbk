@@ -1,0 +1,10 @@
+CONST MaxValue : Integer = 100
+CONST Pi : Float = 3.14
+CONST Flag : Boolean = true
+
+method Main is
+begin
+    output("MaxValue:", MaxValue)
+    output("Pi:", Pi)
+    output("Flag:", Flag)
+end Main

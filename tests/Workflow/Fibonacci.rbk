@@ -1,0 +1,16 @@
+-- Tests recursion via the classic Fibonacci sequence
+function Fibonacci(N : Integer) -> Integer is
+begin
+    if N <= 1 then
+        return N
+    end
+    return Fibonacci(N - 1) + Fibonacci(N - 2)
+end Fibonacci
+
+method Main is
+begin
+    output("Fib(0):", Fibonacci(0))
+    output("Fib(1):", Fibonacci(1))
+    output("Fib(5):", Fibonacci(5))
+    output("Fib(10):", Fibonacci(10))
+end Main

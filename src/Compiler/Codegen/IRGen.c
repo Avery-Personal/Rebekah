@@ -64,6 +64,41 @@ void DeclareVariablesInStatement(IRGenContext *Context, ASTStatement *Statement)
 
             break;
         }
+
+        case STMT_IF: {
+            for (size_t i = 0; i < Statement -> If.ThenCount; i++)
+                DeclareVariablesInStatement(Context, Statement -> If.ThenBlock[i]);
+
+            for (size_t i = 0; i < Statement -> If.ElseIfCount; i++)
+                for (size_t j = 0; j < Statement -> If.ElseIfs[i].Count; j++)
+                    DeclareVariablesInStatement(Context, Statement -> If.ElseIfs[i].Block[j]);
+
+            for (size_t i = 0; i < Statement -> If.ElseCount; i++)
+                DeclareVariablesInStatement(Context, Statement -> If.ElseBlock[i]);
+
+            break;
+        }
+
+        case STMT_WHILE: {
+            for (size_t i = 0; i < Statement -> While.Count; i++)
+                DeclareVariablesInStatement(Context, Statement -> While.Body[i]);
+
+            break;
+        }
+
+        case STMT_FOR: {
+            for (size_t i = 0; i < Statement -> For.Count; i++)
+                DeclareVariablesInStatement(Context, Statement -> For.Body[i]);
+
+            break;
+        }
+
+        case STMT_REPEAT: {
+            for (size_t i = 0; i < Statement -> Repeat.Count; i++)
+                DeclareVariablesInStatement(Context, Statement -> Repeat.Body[i]);
+
+            break;
+        }
         
         default:
             break;
@@ -590,7 +625,13 @@ IRProgram *GenerateIR(ASTProgram *Program) {
         for (size_t i = 0; i < Program -> StatementCount; i++) {
             GenerateStatement(Context, Program -> Statements[i]);
         }
-        
+
+        IRInstruction *Halt = calloc(1, sizeof(IRInstruction));
+
+        Halt -> Op = IR_RETURN;
+        Halt -> Destination = NULL;
+
+        IRAddInstruction(MainFunction, Halt);
         IRAddFunction(Context -> Program, MainFunction);
     }
     

@@ -1,0 +1,8 @@
+method Main is
+begin
+    MUTABLE A : Boolean = true
+    MUTABLE B : Boolean = false
+    
+    output("A:", A)
+    output("B:", B)
+end Main

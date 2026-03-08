@@ -1,0 +1,4 @@
+method Main is
+begin
+    MUTABLE X : Integer = 3.14
+end Main

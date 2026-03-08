@@ -1,0 +1,4 @@
+method Main is
+begin
+    MUTABLE X : = 5
+end Main

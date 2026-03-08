@@ -606,7 +606,7 @@ BytecodeProgram *LowerProgram(IRProgram *Program) {
     BytecodeProgram *Bytecode = calloc(1, sizeof(BytecodeProgram));
 
     Bytecode -> FunctionCount = Program -> FunctionCount;
-    Bytecode -> Functions = calloc(Bytecode -> FunctionCount, sizeof(BytecodeFunction*));
+    Bytecode -> Functions = calloc(Bytecode -> FunctionCount, sizeof(BytecodeFunction *));
 
     for (size_t i = 0; i < Program -> FunctionCount; i++) {
         Bytecode -> Functions[i] = LowerFunction(Program -> Functions[i]);
@@ -617,6 +617,14 @@ BytecodeProgram *LowerProgram(IRProgram *Program) {
 
     Bytecode -> EntryFunction = 0;
     Bytecode -> GlobalCount = 0;
+
+    for (size_t i = 0; i < Bytecode -> FunctionCount; i++) {
+        if (Bytecode -> Functions[i ]-> Name && strcmp(Bytecode -> Functions[i] -> Name, "_start") == 0) {
+            Bytecode -> EntryFunction = i;
+
+            break;
+        }
+    }
 
     return Bytecode;
 }

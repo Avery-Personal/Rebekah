@@ -1,0 +1,6 @@
+CONST X : Integer = 5
+
+method Main is
+begin
+    X := 10
+end Main

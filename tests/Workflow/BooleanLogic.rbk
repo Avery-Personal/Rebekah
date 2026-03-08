@@ -1,0 +1,22 @@
+method Main is
+begin
+    MUTABLE A : Boolean = true
+    MUTABLE B : Boolean = false
+
+    if A then
+        output("A is:", "true")
+    end
+
+    if not B then
+        output("B is:", "false")
+    end
+
+    MUTABLE X : Integer = 5
+    if X >= 5 then
+        output("X >= 5:", true)
+    end
+
+    if X != 99 then
+        output("X != 99:", true)
+    end
+end Main

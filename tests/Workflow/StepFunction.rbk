@@ -1,0 +1,16 @@
+function Step(Value : Float) -> Float is
+begin
+    if Value >= 0.0 then
+        return 1.0
+    else
+        return 0.0
+    end
+end Step
+
+method Main is
+begin
+    output("Step(-1.0):", Step(-1.0))
+    output("Step(0.0):", Step(0.0))
+    output("Step(1.0):", Step(1.0))
+    output("Step(5.5):", Step(5.5))
+end Main
