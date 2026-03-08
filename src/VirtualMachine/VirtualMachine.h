@@ -14,6 +14,9 @@ typedef enum {
     BC_OP_STORE,
     BC_OP_LEA,
 
+    BC_OP_GLOAD,
+    BC_OP_GSTORE,
+
     BC_OP_ADD,
     BC_OP_SUB,
     BC_OP_MUL,
@@ -142,7 +145,7 @@ const char *OpcodeName(uint8_t Op);
 
 static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCount, uint16_t *NextRegister);
 
-BytecodeFunction *LowerFunction(IRFunction *_IRFunction);
+BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariables, size_t GlobalVariableCount);
 BytecodeProgram *LowerProgram(IRProgram *Program);
 
 VirtualMachine *VirtualMachineCreate(BytecodeProgram *Program);

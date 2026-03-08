@@ -253,7 +253,7 @@ void StartREPL() {
     void RunTests(const char *Path) {
         TestsRun = TestsPassed = TestsFailed = 0;
 
-        WalkDirectory("tests/workflow", Path);
+        WalkDirectory("tests/Workflow", Path);
 
         printf("  %d / %d tests passed", TestsPassed, TestsRun);
         if (TestsFailed > 0)

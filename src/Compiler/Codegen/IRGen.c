@@ -612,6 +612,14 @@ IRProgram *GenerateIR(ASTProgram *Program) {
     }
 
     Context -> CurrentFunction = NULL;
+    Context -> Program -> GlobalVariableCount = Context -> VariableCount;
+
+    if (Context -> VariableCount > 0) {
+        Context -> Program -> GlobalVariables = malloc(sizeof(IRValue *) * Context -> VariableCount);
+
+        for (size_t i = 0; i < Context -> VariableCount; i++)
+            Context -> Program -> GlobalVariables[i] = Context -> Variables[i].Value;
+    }
     
     for (size_t i = 0; i < Program -> SubprogramCount; i++) {
         IRGenerateFunction(Context, Program -> Subprograms[i]);

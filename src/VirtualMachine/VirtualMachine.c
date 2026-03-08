@@ -14,6 +14,9 @@ const char *OpcodeName(uint8_t Op) {
         case BC_OP_STORE: return "STORE";
         case BC_OP_LEA: return "LEA";
 
+        case BC_OP_GLOAD: return "GLOAD";
+        case BC_OP_GSTORE: return "GSTORE";
+
         case BC_OP_ADD: return "ADD";
         case BC_OP_SUB: return "SUB";
         case BC_OP_MUL: return "MUL";
@@ -121,7 +124,14 @@ static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCo
     return Register;
 }
 
-BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
+int IsGlobal(IRValue *Value, IRValue **GlobalVariables, size_t GlobalVariableCount) {
+    for (size_t g = 0; g < GlobalVariableCount; g++)
+        if (GlobalVariables[g] == Value) return 1;
+
+    return 0;
+}
+
+BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariables, size_t GlobalVariableCount) {
     BytecodeFunction *Function = calloc(1, sizeof(BytecodeFunction));
 
     Function -> Name = _IRFunction -> Name;
@@ -173,70 +183,96 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction) {
             case IR_STORE: {
                 IRValue *Variable = Instruction -> Destination;
 
-                uint16_t GlobalIndex = 0;
+                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
 
-                int Found = 0;
+                int GlobalIndex = -1;
 
-                for (size_t v = 0; v < VariableCount; v++) {
-                    if (VariableMap[v].Variable == Variable) {
-                        GlobalIndex = VariableMap[v].Index;
-
-                        Found = 1;
+                for (size_t i = 0; i < GlobalVariableCount; i++) {
+                    if (GlobalVariables[i] == Variable) {
+                        GlobalIndex = (int) i;
 
                         break;
                     }
                 }
 
-                if (!Found) {
-                    GlobalIndex = NextGlobal++;
+                if (GlobalIndex >= 0) {
+                    Output -> Opcode = BC_OP_GSTORE;
+                    Output -> A = (uint16_t) GlobalIndex;
+                    Output -> B = Source;
+                } else {
+                    uint16_t LocalIndex = 0;
 
-                    VariableMap[VariableCount].Variable   = Variable;
-                    VariableMap[VariableCount].Index = GlobalIndex;
+                    int Found = 0;
 
-                    VariableCount++;
+                    for (size_t v = 0; v < VariableCount; v++) {
+                        if (VariableMap[v].Variable == Variable) {
+                            LocalIndex = VariableMap[v].Index; Found = 1; break;
+                        }
+                    }
+
+                    if (!Found) {
+                        LocalIndex = NextGlobal++;
+
+                        VariableMap[VariableCount].Variable = Variable;
+                        VariableMap[VariableCount].Index = LocalIndex;
+
+                        VariableCount++;
+                    }
+
+                    Output -> Opcode = BC_OP_STORE;
+                    Output -> A = LocalIndex;
+                    Output -> B = Source;
                 }
-
-                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-
-                Output -> Opcode = BC_OP_STORE;
-                Output -> A = GlobalIndex;
-                Output -> B = Source;
-
+                
                 break;
             }
 
             case IR_LOAD: {
                 IRValue *Variable = Instruction -> Source1;
 
-                uint16_t GlobalIndex = 0;
+                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
 
-                int Found = 0;
+                int GlobalIndex = -1;
 
-                for (size_t v = 0; v < VariableCount; v++) {
-                    if (VariableMap[v].Variable == Variable) {
-                        GlobalIndex = VariableMap[v].Index;
-
-                        Found = 1;
+                for (size_t i = 0; i < GlobalVariableCount; i++) {
+                    if (GlobalVariables[i] == Variable) {
+                        GlobalIndex = (int) i;
 
                         break;
                     }
                 }
 
-                if (!Found) {
-                    GlobalIndex = NextGlobal++;
+                if (GlobalIndex >= 0) {
+                    Output -> Opcode = BC_OP_GLOAD;
+                    Output -> A = Destination;
+                    Output -> B = (uint16_t) GlobalIndex;
+                } else {
+                    uint16_t LocalIndex = 0;
 
-                    VariableMap[VariableCount].Variable = Variable;
-                    VariableMap[VariableCount].Index = GlobalIndex;
-                    
-                    VariableCount++;
+                    int Found = 0;
+
+                    for (size_t v = 0; v < VariableCount; v++) {
+                        if (VariableMap[v].Variable == Variable) {
+                            LocalIndex = VariableMap[v].Index;
+                            Found = 1;
+                            
+                            break;
+                        }
+                    }
+
+                    if (!Found) {
+                        LocalIndex = NextGlobal++;
+
+                        VariableMap[VariableCount].Variable = Variable;
+                        VariableMap[VariableCount].Index = LocalIndex;
+
+                        VariableCount++;
+                    }
+
+                    Output -> Opcode = BC_OP_LOAD;
+                    Output -> A = Destination;
+                    Output -> B = LocalIndex;
                 }
-
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-
-                Output -> Opcode = BC_OP_LOAD;
-
-                Output -> A = Destination;
-                Output -> B = GlobalIndex;
 
                 break;
             }
@@ -609,7 +645,7 @@ BytecodeProgram *LowerProgram(IRProgram *Program) {
     Bytecode -> Functions = calloc(Bytecode -> FunctionCount, sizeof(BytecodeFunction *));
 
     for (size_t i = 0; i < Program -> FunctionCount; i++) {
-        Bytecode -> Functions[i] = LowerFunction(Program -> Functions[i]);
+        Bytecode -> Functions[i] = LowerFunction(Program -> Functions[i], Program -> GlobalVariables, Program -> GlobalVariableCount);
     }
 
     RegisterNative(Bytecode, "output", NativeOutput, 0);
@@ -619,12 +655,14 @@ BytecodeProgram *LowerProgram(IRProgram *Program) {
     Bytecode -> GlobalCount = 0;
 
     for (size_t i = 0; i < Bytecode -> FunctionCount; i++) {
-        if (Bytecode -> Functions[i ]-> Name && strcmp(Bytecode -> Functions[i] -> Name, "_start") == 0) {
+        if (Bytecode -> Functions[i]-> Name && strcmp(Bytecode -> Functions[i] -> Name, "_start") == 0) {
             Bytecode -> EntryFunction = i;
 
             break;
         }
     }
+
+    Bytecode -> GlobalCount = (uint32_t) Program -> GlobalVariableCount;
 
     return Bytecode;
 }
@@ -635,7 +673,7 @@ VirtualMachine *VirtualMachineCreate(BytecodeProgram *Program) {
     _VirtualMachine -> Program = Program;
     _VirtualMachine -> Halted = 0;
 
-    _VirtualMachine -> Globals = calloc(Program -> GlobalCount, sizeof(uint64_t));
+    _VirtualMachine -> Globals = calloc(Program -> GlobalCount > 0 ? Program -> GlobalCount : 1, sizeof(uint64_t));
 
     BytecodeFunction *Entry = Program -> Functions[Program -> EntryFunction];
     VirtualFrame *Frame = calloc(1, sizeof(VirtualFrame));
@@ -719,6 +757,16 @@ void VirtualMachineExecute(VirtualMachine *_VirtualMachine) {
 
             case BC_OP_STORE:
                 Global[Instruction.A] = Register[Instruction.B];
+
+                break;
+            
+            case BC_OP_GLOAD:
+                Register[Instruction.A] = _VirtualMachine -> Globals[Instruction.B];
+
+                break;
+
+            case BC_OP_GSTORE:
+                _VirtualMachine -> Globals[Instruction.A] = Register[Instruction.B];
 
                 break;
 

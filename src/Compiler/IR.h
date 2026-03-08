@@ -109,6 +109,9 @@ typedef struct {
 typedef struct {
     IRFunction **Functions;
     size_t FunctionCount;
+
+    IRValue **GlobalVariables;
+    size_t GlobalVariableCount;
 } IRProgram;
 
 char *ExtractName(const char *Source);
