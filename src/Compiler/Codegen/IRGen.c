@@ -567,6 +567,16 @@ void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
 
 IRProgram *GenerateIR(ASTProgram *Program) {
     IRGenContext *Context = CreateIRGenContext();
+
+    IRFunction *GlobalScope = IRCreateFunction("_globals", IR_TYPE_VOID);
+
+    Context -> CurrentFunction = GlobalScope;
+
+    for (size_t i = 0; i < Program -> StatementCount; i++) {
+        DeclareVariablesInStatement(Context, Program -> Statements[i]);
+    }
+
+    Context -> CurrentFunction = NULL;
     
     for (size_t i = 0; i < Program -> SubprogramCount; i++) {
         IRGenerateFunction(Context, Program -> Subprograms[i]);
@@ -576,10 +586,6 @@ IRProgram *GenerateIR(ASTProgram *Program) {
         IRFunction *MainFunction = IRCreateFunction("_start", IR_TYPE_VOID);
 
         Context -> CurrentFunction = MainFunction;
-
-        for (size_t i = 0; i < Program -> StatementCount; i++) {
-            DeclareVariablesInStatement(Context, Program -> Statements[i]);
-        }
         
         for (size_t i = 0; i < Program -> StatementCount; i++) {
             GenerateStatement(Context, Program -> Statements[i]);

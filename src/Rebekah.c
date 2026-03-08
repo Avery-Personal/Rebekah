@@ -86,8 +86,17 @@ void StartREPL() {
     }
 }
 
+void RunTests() {
+    char *Unterminated = ReadFile("tests/Workflow/Lexer/Unterminated.rbk");
+    char *UnterminatedExp = ReadFile("tests/Workflow/Lexer/Unterminated.exp");
+}
+
 int main(int argc, char **argv) {
     if (argc > 1) {
+        if (strcmp(argv[1], "--run-tests") == 0) {
+            //RunTests();
+        }
+
         char *Source = ReadFile(argv[1]);
         if (!Source) {
             printf("Failed to read file: %s\n", argv[1]);
