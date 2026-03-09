@@ -42,7 +42,10 @@ typedef enum {
     BC_OP_CALL,
     BC_OP_RET,
 
-    BC_OP_PRINT,
+    BC_OP_ARRAY_ALLOC,
+    BC_OP_ARRAY_INDEX,
+    BC_OP_PLOAD,
+    BC_OP_PSTORE,
 
     BC_OP_HALT
 } Opcodes;
@@ -52,7 +55,12 @@ typedef enum {
     FUNCTION_NATIVE
 } FunctionType;
 
-typedef uint64_t (*NativeFunction)(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount);
+typedef uint64_t (*NativeFunction)(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount, uint8_t ReturnType);
+
+typedef struct {
+    IRValue *Variable;
+    uint16_t Index;
+} VariableEntry;
 
 typedef struct {
     IRValue *Value;
@@ -81,7 +89,10 @@ typedef struct {
     uint32_t InstructionIndex;
 
     uint8_t *ArgumentTypes;
+    uint16_t *ArgumentRegisters;
     uint16_t ArgumentCount;
+
+    uint8_t ReturnType;
 } CallArgumentInfo;
 
 typedef struct {
@@ -143,7 +154,7 @@ typedef struct {
 
 const char *OpcodeName(uint8_t Op);
 
-static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCount, uint16_t *NextRegister);
+static uint16_t AssignRegister(IRValue *Value, RegisterEntry **MapPointer, size_t *MapCapacity, size_t *MapCount, uint16_t *NextRegister);
 
 BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariables, size_t GlobalVariableCount);
 BytecodeProgram *LowerProgram(IRProgram *Program);

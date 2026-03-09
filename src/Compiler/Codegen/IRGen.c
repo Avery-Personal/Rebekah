@@ -165,6 +165,36 @@ const char *GenerateLabel(IRGenContext *Context, const char *Prefix) {
     return Label;
 }
 
+static IRTypeKind ASTTypeKindToIR(ASTTypeKind Kind) {
+    switch (Kind) {
+        case TYPE_INT: return IR_TYPE_INT;
+        case TYPE_FLOAT: return IR_TYPE_FLOAT;
+        case TYPE_CHAR: return IR_TYPE_CHAR;
+        case TYPE_BOOL: return IR_TYPE_BOOL;
+        case TYPE_VOID: return IR_TYPE_VOID;
+        case TYPE_ARRAY: return IR_TYPE_PTR;
+        
+        default: return IR_TYPE_INT;
+    }
+}
+
+static void SetArrayElementTypes(IRValue *Value, ASTType *Type) {
+    if (!Value || !Type || Type -> Kind != TYPE_ARRAY) return;
+
+    ASTType *ElementType = Type -> ElementType;
+
+    if (!ElementType) return;
+
+    if (ElementType -> Kind == TYPE_ARRAY) {
+        Value -> ElementType = IR_TYPE_PTR;
+
+        if (ElementType -> ElementType)
+            Value -> SubElementType = ASTTypeKindToIR(ElementType -> ElementType -> Kind);
+    } else {
+        Value -> ElementType = ASTTypeKindToIR(ElementType -> Kind);
+    }
+}
+
 IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
     if (!Expression) return NULL;
     
@@ -176,6 +206,10 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
                 Temp -> Type = IR_TYPE_PTR;
 
                 IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t)(uintptr_t) Expression -> Literal.String));
+            } else if (Expression -> Literal.LiteralKind == TYPE_CHAR) {
+                Temp -> Type = IR_TYPE_CHAR;
+
+                IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t)(unsigned char) Expression -> Literal.Char));
             } else if (Expression -> Literal.LiteralKind == TYPE_INT) {
                 IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(Temp, (int64_t) Expression -> Literal.Int));
             } else {
@@ -269,27 +303,43 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
         }
         
         case EXPR_ARRAY_LITERAL: {
-            IRValue *Size = IRCreateConst(Expression -> Array.Count);
+            IRValue *SizeTemp = IRCreateTemp(IR_TYPE_INT);
+
+            IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(SizeTemp, Expression -> Array.Count));
+
             IRValue *Array = IRCreateTemp(IR_TYPE_PTR);
-            
-            IRInstruction *Alloc = IRCreateArrayAlloc(Array, Size);
+            IRInstruction *Alloc = IRCreateArrayAlloc(Array, SizeTemp);
 
             IRAddInstruction(Context -> CurrentFunction, Alloc);
-            
+
+            IRTypeKind ElementType = IR_TYPE_INT;
+            IRTypeKind SubElementType = IR_TYPE_INT;
+
             for (size_t i = 0; i < Expression -> Array.Count; i++) {
                 IRValue *Element = GenerateExpression(Context, Expression -> Array.Elements[i]);
-                IRValue *Index = IRCreateConst(i);
-                IRValue *Address = IRCreateTemp(IR_TYPE_PTR);
-                
-                IRInstruction *CalcAddr = IRCreateArrayIndex(Address, Array, Index);
 
-                IRAddInstruction(Context -> CurrentFunction, CalcAddr);
-                
+                if (i == 0 && Element) {
+                    ElementType = Element -> Type;
+                    SubElementType = Element -> ElementType;
+                }
+
+                IRValue *IndexTemp = IRCreateTemp(IR_TYPE_INT);
+
+                IRAddInstruction(Context -> CurrentFunction, IRCreateConstInst(IndexTemp, (int64_t) i));
+
+                IRValue *Address = IRCreateTemp(IR_TYPE_PTR);
+                IRInstruction *CalcAddress = IRCreateArrayIndex(Address, Array, IndexTemp);
+
+                IRAddInstruction(Context -> CurrentFunction, CalcAddress);
+
                 IRInstruction *Store = IRCreateStore(Address, Element);
 
                 IRAddInstruction(Context -> CurrentFunction, Store);
             }
-            
+
+            Array -> ElementType = ElementType;
+            Array -> SubElementType = SubElementType;
+
             return Array;
         }
         
@@ -301,8 +351,19 @@ IRValue *GenerateExpression(IRGenContext *Context, ASTExpression *Expression) {
             IRInstruction *CalcAddr = IRCreateArrayIndex(Address, Array, Index);
 
             IRAddInstruction(Context -> CurrentFunction, CalcAddr);
+
+            IRTypeKind ResultType = IR_TYPE_INT;
+            IRTypeKind ResultElementType = IR_TYPE_INT;
+
+            if (Array && Array -> ElementType != 0) {
+                ResultType = Array -> ElementType;
+                ResultElementType = Array -> SubElementType;
+            }
             
-            IRValue *Result = IRCreateTemp(IR_TYPE_INT);
+            IRValue *Result = IRCreateTemp(ResultType);
+
+            Result -> ElementType = ResultElementType;
+
             IRInstruction *Load = IRCreateLoad(Result, Address);
 
             IRAddInstruction(Context -> CurrentFunction, Load);
@@ -576,6 +637,8 @@ void IRGenerateFunction(IRGenContext *Context, ASTSubprogram *Subprogram) {
         IRValue *Parameter = IRCreateVar(Subprogram -> Params[i].Name, IR_TYPE_INT);
 
         Parameter -> Kind = VALUE_PARAM;
+
+        SetArrayElementTypes(Parameter, Subprogram -> Params[i].Type);
 
         Function -> Params = realloc(Function -> Params, sizeof(IRValue *) * (Function -> ParamCount + 1));
         Function -> Params[Function -> ParamCount++] = Parameter;

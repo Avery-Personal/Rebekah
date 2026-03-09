@@ -208,7 +208,7 @@ const char *TypeToString(ASTType *Type) {
                 case TYPE_BOOL: return "Boolean";
                 case TYPE_INT: return "Integer";
                 case TYPE_FLOAT: return "Float";
-                case TYPE_CHAR: return "Char";
+                case TYPE_CHAR: return "Character";
                 case TYPE_STRING: return "String";
                 case TYPE_VOID: return "void";
 
@@ -228,7 +228,7 @@ ASTType *GetExpressionType(SemanticAnalyzer *Analyzer, ASTExpression *Expression
                 case TYPE_FLOAT: Type -> Name = "Float"; Type -> Kind = TYPE_FLOAT;  break;
                 case TYPE_BOOL: Type -> Name = "Boolean"; Type -> Kind = TYPE_BOOL; break;
                 case TYPE_STRING: Type -> Name = "String"; Type -> Kind = TYPE_STRING;  break;
-                case TYPE_CHAR: Type -> Name = "Char"; Type -> Kind = TYPE_CHAR; break;
+                case TYPE_CHAR: Type -> Name = "Character"; Type -> Kind = TYPE_CHAR; break;
 
                 default: Type -> Name = "Integer"; Type -> Kind = TYPE_INT; break;
             }

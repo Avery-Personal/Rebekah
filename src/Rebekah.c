@@ -69,6 +69,9 @@ int RunSource(char *Source) {
     BytecodeProgram *Bytecode = LowerProgram(IR);
     VirtualMachine *VM = VirtualMachineCreate(Bytecode);
 
+    //IRPrint(IR);
+    //PrintProgram(Bytecode);
+
     VirtualMachineExecute(VM);
 
     DestroySemanticAnalyzer(Analyzer);
@@ -153,7 +156,7 @@ void StartREPL() {
         if (!Extension)
             return;
 
-        strcpy(Extension, ".Expected");
+        strcpy(Extension, ".expected");
 
         FILE *Check = fopen(ExpectedPath, "r");
         if (!Check) {
@@ -263,9 +266,7 @@ void StartREPL() {
             exit(1);
     }
 #elifdef _WIN32
-    void RunTests(const char *Path) {
-        int i = 0;
-    }
+    void RunTests(const char *Path) {}
 #endif
 
 int main(int argc, char **argv) {

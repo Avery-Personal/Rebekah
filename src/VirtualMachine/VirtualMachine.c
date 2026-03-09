@@ -42,7 +42,10 @@ const char *OpcodeName(uint8_t Op) {
         case BC_OP_CALL: return "CALL";
         case BC_OP_RET: return "RET";
 
-        case BC_OP_PRINT: return "PRINT";
+        case BC_OP_ARRAY_ALLOC: return "ARRAY_ALLOC";
+        case BC_OP_ARRAY_INDEX: return "ARRAY_IDX";
+        case BC_OP_PLOAD: return "PLOAD";
+        case BC_OP_PSTORE: return "PSTORE";
 
         case BC_OP_HALT: return "HALT";
 
@@ -50,7 +53,7 @@ const char *OpcodeName(uint8_t Op) {
     }
 }
 
-static uint64_t NativeOutput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount) {
+static uint64_t NativeOutput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount, uint8_t ReturnType) {
     for (size_t i = 0; i < ArgumentCount; i++) {
         if (i > 0)
             printf(" ");
@@ -67,34 +70,84 @@ static uint64_t NativeOutput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t
     return 0;
 }
 
-static uint64_t NativeInput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount) {
+static uint64_t NativeInput(uint64_t *Arguments, uint8_t *ArgumentTypes, size_t ArgumentCount, uint8_t ReturnType) {
     char Buffer[512];
     char *End;
 
-    if (ArgumentCount > 0) {
-        if (ArgumentTypes[0] == IR_TYPE_PTR) {
-            printf("%s", (const char *)(uintptr_t) Arguments[0]);
+    if (ArgumentCount > 0 && ArgumentTypes[0] == IR_TYPE_PTR) {
+        printf("%s", (const char *)(uintptr_t) Arguments[0]);
+        fflush(stdout);
+    }
 
-            fflush(stdout);
+    while (1) {
+        if (!fgets(Buffer, sizeof(Buffer), stdin))
+            return 0;
+
+        size_t Len = strlen(Buffer);
+        if (Len > 0 && Buffer[Len - 1] == '\n')
+            Buffer[--Len] = '\0';
+
+        switch (ReturnType) {
+            case IR_TYPE_INT: {
+                if (Len == 0) {
+                    printf("Expected an integer: ");
+                    fflush(stdout);
+                    
+                    continue;
+                }
+
+                int64_t Value = strtoll(Buffer, &End, 10);
+
+                if (*End == '\0') return (uint64_t) Value;
+
+                printf("Expected an integer: "); fflush(stdout);
+
+                break;
+            }
+            case IR_TYPE_FLOAT: {
+                if (Len == 0) {
+                    printf("Expected a number: ");
+                    fflush(stdout);
+                    
+                    continue;
+                }
+
+                double Value = strtod(Buffer, &End);
+
+                if (*End == '\0') {
+                    uint64_t Result;
+
+                    memcpy(&Result, &Value, sizeof(double));
+
+                    return Result;
+                }
+
+                printf("Expected a number: "); fflush(stdout);
+
+                break;
+            }
+            case IR_TYPE_BOOL: {
+                if (strcmp(Buffer, "true") == 0 || strcmp(Buffer, "1") == 0) return 1;
+                if (strcmp(Buffer, "false") == 0 || strcmp(Buffer, "0") == 0) return 0;
+
+                printf("Expected true or false: "); fflush(stdout);
+
+                break;
+            }
+            case IR_TYPE_CHAR: {
+                if (Len >= 1) return (uint64_t)(unsigned char) Buffer[0];
+
+                printf("Expected a character: "); fflush(stdout);
+
+                break;
+            }
+            default: {
+                char *String = strdup(Buffer);
+
+                return (uint64_t)(uintptr_t) String;
+            }
         }
     }
-
-    if (!fgets(Buffer, sizeof(Buffer), stdin))
-        return 0;
-
-    size_t Len = strlen(Buffer);
-    if (Len > 0 && Buffer[Len - 1] == '\n')
-        Buffer[Len - 1] = '\0';
-
-    int64_t Value = strtoll(Buffer, &End, 10);
-
-    if (*End == '\0') {
-        return (uint64_t) Value;
-    }
-
-    char *String = strdup(Buffer);
-
-    return (uint64_t) String;
 }
 
 static void RegisterNative(BytecodeProgram *Program, const char *Name, NativeFunction Function, uint16_t ArgumentCount) {
@@ -108,10 +161,19 @@ static void RegisterNative(BytecodeProgram *Program, const char *Name, NativeFun
     Entry -> ArgumentCount = ArgumentCount;
 }
 
-static uint16_t AssignRegister(IRValue *Value, RegisterEntry *Map, size_t *MapCount, uint16_t *NextRegister) {
+static uint16_t AssignRegister(IRValue *Value, RegisterEntry **MapPointer, size_t *MapCapacity, size_t *MapCount, uint16_t *NextRegister) {
+    RegisterEntry *Map = *MapPointer;
+
     for (size_t i = 0; i < *MapCount; i++) {
         if (Map[i].Value == Value)
             return Map[i].Register;
+    }
+
+    if (*MapCount >= *MapCapacity) {
+        *MapCapacity *= 2;
+        *MapPointer = realloc(*MapPointer, sizeof(RegisterEntry) * (*MapCapacity));
+
+        Map = *MapPointer;
     }
 
     uint16_t Register = (*NextRegister)++;
@@ -136,28 +198,25 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
 
     Function -> Name = _IRFunction -> Name;
     Function -> InstructionCount = _IRFunction -> InstructionCount;
-    Function -> Code = calloc(Function -> InstructionCount, sizeof(BytecodeInstruction));
+    Function -> Code = calloc(Function -> InstructionCount * 2 + 8, sizeof(BytecodeInstruction));
 
     LabelEntry *Labels = calloc(_IRFunction -> InstructionCount, sizeof(LabelEntry));
     size_t LabelCount = 0;
 
-    RegisterEntry RegisterMap[512];
+    RegisterEntry *RegisterMap = calloc(2048, sizeof(RegisterEntry));
+    size_t RegisterMapCapacity = 2048;
     size_t RegisterMapCount = 0;
     uint16_t NextRegister = 0;
 
-    typedef struct {
-        IRValue *Variable;
-        uint16_t Index;
-    } VariableEntry;
-
-    VariableEntry VariableMap[256];
+    VariableEntry *VariableMap = calloc(512, sizeof(VariableEntry));
+    size_t VariableMapCapacity = 512;
     size_t VariableCount = 0;
     uint16_t NextGlobal = 0;
 
     size_t ByteIndex = 0;
 
     for (size_t i = 0; i < _IRFunction -> ParamCount; i++) {
-        AssignRegister(_IRFunction -> Params[i], RegisterMap, &RegisterMapCount, &NextRegister);
+        AssignRegister(_IRFunction -> Params[i], &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
     }
 
     for (size_t i = 0; i < _IRFunction -> InstructionCount; i++) {
@@ -187,12 +246,22 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             case IR_STORE: {
                 IRValue *Variable = Instruction -> Destination;
 
-                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Source = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 int GlobalIndex = -1;
 
+                if (Variable -> Kind == VALUE_TEMP && Variable -> Type == IR_TYPE_PTR) {
+                    uint16_t AddressRegister = AssignRegister(Variable, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+
+                    Output -> Opcode = BC_OP_PSTORE;
+                    Output -> A = AddressRegister;
+                    Output -> B = Source;
+
+                    break;
+                }
+
                 if (Variable -> Kind == VALUE_PARAM) {
-                    uint16_t ParameterRegister = AssignRegister(Variable, RegisterMap, &RegisterMapCount, &NextRegister);
+                    uint16_t ParameterRegister = AssignRegister(Variable, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                     Output -> Opcode = BC_OP_MOV;
                     Output -> A = ParameterRegister;
@@ -227,6 +296,11 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
                     if (!Found) {
                         LocalIndex = NextGlobal++;
 
+                        if (VariableCount >= VariableMapCapacity) {
+                            VariableMapCapacity *= 2;
+                            VariableMap = realloc(VariableMap, sizeof(VariableEntry) * VariableMapCapacity);
+                        }
+
                         VariableMap[VariableCount].Variable = Variable;
                         VariableMap[VariableCount].Index = LocalIndex;
 
@@ -244,12 +318,22 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             case IR_LOAD: {
                 IRValue *Variable = Instruction -> Source1;
 
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 int GlobalIndex = -1;
 
+                if (Variable -> Kind == VALUE_TEMP && Variable -> Type == IR_TYPE_PTR) {
+                    uint16_t AddressRegister = AssignRegister(Variable, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+
+                    Output -> Opcode = BC_OP_PLOAD;
+                    Output -> A = Destination;
+                    Output -> B = AddressRegister;
+
+                    break;
+                }
+
                 if (Variable -> Kind == VALUE_PARAM) {
-                    uint16_t ParameterRegister = AssignRegister(Variable, RegisterMap, &RegisterMapCount, &NextRegister);
+                    uint16_t ParameterRegister = AssignRegister(Variable, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                     Output -> Opcode = BC_OP_MOV;
                     Output -> A = Destination;
@@ -287,6 +371,11 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
                     if (!Found) {
                         LocalIndex = NextGlobal++;
 
+                        if (VariableCount >= VariableMapCapacity) {
+                            VariableMapCapacity *= 2;
+                            VariableMap = realloc(VariableMap, sizeof(VariableEntry) * VariableMapCapacity);
+                        }
+
                         VariableMap[VariableCount].Variable = Variable;
                         VariableMap[VariableCount].Index = LocalIndex;
 
@@ -302,7 +391,7 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_CONST: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CONST;
                 Output -> A = Destination;
@@ -324,8 +413,8 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_MOVE: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_MOV;
 
@@ -336,9 +425,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
             
             case IR_ADD: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_ADD;
                 
@@ -350,9 +439,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_SUB: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_SUB;
                 
@@ -364,9 +453,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_MUL: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_MUL;
                 
@@ -378,9 +467,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_DIV: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_DIV;
                 
@@ -392,9 +481,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_MOD: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_MOD;
                 
@@ -406,8 +495,8 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_NEG: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_NEG;
                 
@@ -418,9 +507,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_EQ: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_EQ;
 
@@ -432,9 +521,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_NE: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_NE;
 
@@ -446,9 +535,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_LT: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_LT;
 
@@ -460,9 +549,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_LE: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_LE;
 
@@ -474,9 +563,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_GT: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_GT;
 
@@ -488,9 +577,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_GE: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CMP_GE;
 
@@ -502,9 +591,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
             
             case IR_AND: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_AND;
 
@@ -516,9 +605,9 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_OR: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source1 = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source2 = AssignRegister(Instruction -> Source2, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source1 = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source2 = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_OR;
 
@@ -530,8 +619,8 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             }
 
             case IR_NOT: {
-                uint16_t Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
-                uint16_t Source  = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t Source  = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_NOT;
 
@@ -560,7 +649,7 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             case IR_JMP_IF: {
                 Output -> Opcode = BC_OP_JMP_IF;
 
-                uint16_t Condition = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Condition = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 const char *Target = Instruction -> Extra -> Label;
 
@@ -580,7 +669,7 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
             case IR_JMP_IF_FALSE: {
                 Output -> Opcode = BC_OP_JMP_IFN;
 
-                uint16_t Condition = AssignRegister(Instruction -> Source1, RegisterMap, &RegisterMapCount, &NextRegister);
+                uint16_t Condition = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 const char *Target = Instruction -> Extra -> Label;
 
@@ -605,24 +694,30 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
                 Info.FunctionName = FunctionName;
                 Info.InstructionIndex = ByteIndex;
                 Info.ArgumentCount = (uint16_t) Instruction -> ArgCount;
-                Info.ArgumentTypes = malloc(Instruction -> ArgCount);
+                Info.ArgumentTypes = malloc((Instruction -> ArgCount ? Instruction -> ArgCount : 1) * sizeof(uint8_t));
+                Info.ArgumentRegisters = malloc((Instruction -> ArgCount ? Instruction -> ArgCount : 1) * sizeof(uint16_t));
+                Info.ReturnType = Instruction -> Destination ? (uint8_t) Instruction -> Destination -> Type : IR_TYPE_VOID;
 
                 uint16_t FirstArgumentRegister = 0;
 
                 for (size_t a = 0; a < Instruction -> ArgCount; a++) {
-                    uint16_t Register = AssignRegister(Instruction -> Args[a], RegisterMap, &RegisterMapCount, &NextRegister);
+                    uint16_t Register = AssignRegister(Instruction -> Args[a], &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+
+                    Info.ArgumentRegisters[a] = Register;
+
                     if (a == 0)
                         FirstArgumentRegister = Register;
 
-                    Info.ArgumentTypes[a] = (uint8_t)Instruction -> Args[a] -> Type;
+                    Info.ArgumentTypes[a] = (uint8_t) Instruction -> Args[a] -> Type;
                 }
 
                 Function -> CallArguments = realloc(Function -> CallArguments, sizeof(CallArgumentInfo) * (Function -> CallArgumentCount + 1));
                 Function -> CallArguments[Function -> CallArgumentCount++] = Info;
 
                 uint16_t Destination = 0;
+
                 if (Instruction -> Destination)
-                    Destination = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+                    Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                 Output -> Opcode = BC_OP_CALL;
                 Output -> A = Destination;
@@ -631,12 +726,36 @@ BytecodeFunction *LowerFunction(IRFunction *_IRFunction, IRValue **GlobalVariabl
 
                 break;
             }
+            
+            case IR_ARRAY_ALLOC: {
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t SizeRegister = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+
+                Output -> Opcode = BC_OP_ARRAY_ALLOC;
+                Output -> A = Destination;
+                Output -> B = SizeRegister;
+
+                break;
+            }
+
+            case IR_ARRAY_INDEX: {
+                uint16_t Destination = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t ArrayRegister = AssignRegister(Instruction -> Source1, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+                uint16_t IndexRegister = AssignRegister(Instruction -> Source2, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
+
+                Output -> Opcode = BC_OP_ARRAY_INDEX;
+                Output -> A = Destination;
+                Output -> B = ArrayRegister;
+                Output -> C = IndexRegister;
+
+                break;
+            }
 
             case IR_RETURN: {
                 Output -> Opcode = BC_OP_RET;
 
                 if (Instruction -> Destination) {
-                    uint16_t Source = AssignRegister(Instruction -> Destination, RegisterMap, &RegisterMapCount, &NextRegister);
+                    uint16_t Source = AssignRegister(Instruction -> Destination, &RegisterMap, &RegisterMapCapacity, &RegisterMapCount, &NextRegister);
 
                     Output -> A = Source;
                 } else {
@@ -919,7 +1038,7 @@ void VirtualMachineExecute(VirtualMachine *_VirtualMachine) {
                         for (size_t a = 0; a < ArgumentInfo -> ArgumentCount; a++)
                             Arguments[a] = Frame -> Registers[Instruction.B + a];
 
-                        uint64_t Result = Entry -> Function(Arguments, ArgumentInfo -> ArgumentTypes, ArgumentInfo -> ArgumentCount);
+                        uint64_t Result = Entry -> Function(Arguments, ArgumentInfo -> ArgumentTypes, ArgumentInfo -> ArgumentCount, ArgumentInfo -> ReturnType);
 
                         free(Arguments);
 
@@ -963,6 +1082,40 @@ void VirtualMachineExecute(VirtualMachine *_VirtualMachine) {
                 break;
             }
 
+            case BC_OP_ARRAY_ALLOC: {
+                uint64_t Count = Register[Instruction.B];
+                uint64_t *Array = calloc(Count > 0 ? Count : 1, sizeof(uint64_t));
+
+                Register[Instruction.A] = (uint64_t)(uintptr_t) Array;
+
+                break;
+            }
+
+            case BC_OP_ARRAY_INDEX: {
+                uint64_t *Array = (uint64_t *)(uintptr_t) Register[Instruction.B];
+                uint64_t Index = Register[Instruction.C];
+
+                Register[Instruction.A] = (uint64_t)(uintptr_t)(&Array[Index]);
+
+                break;
+            }
+
+            case BC_OP_PLOAD: {
+                uint64_t *Pointer = (uint64_t *)(uintptr_t) Register[Instruction.B];
+
+                Register[Instruction.A] = *Pointer;
+
+                break;
+            }
+
+            case BC_OP_PSTORE: {
+                uint64_t *Pointer = (uint64_t *)(uintptr_t) Register[Instruction.A];
+
+                *Pointer = Register[Instruction.B];
+
+                break;
+            }
+
             case BC_OP_RET: {
                 uint64_t ReturnValue = Register[Instruction.A];
                 uint16_t DestinationRegister = Frame -> ReturnRegister;
@@ -976,10 +1129,6 @@ void VirtualMachineExecute(VirtualMachine *_VirtualMachine) {
                 }
 
                 break;
-            }
-
-            case BC_OP_PRINT: {
-                printf("\nHello from Rebekah!\n");
             }
 
             case BC_OP_HALT:

@@ -63,6 +63,8 @@ typedef enum {
 typedef struct {
     IRValueKind Kind;
     IRTypeKind Type;
+    IRTypeKind ElementType;
+    IRTypeKind SubElementType;
     
     union {
         int64_t IntValue;

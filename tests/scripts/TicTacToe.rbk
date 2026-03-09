@@ -1,0 +1,221 @@
+CONST BoardSize : Integer = 3
+CONST Empty : Character = ' '
+CONST Player : Character = 'X'
+CONST AI : Character = 'O'
+
+function CreateBoard() -> Array<Array<Character>> is
+begin
+    return [
+        [Empty, Empty, Empty],
+        [Empty, Empty, Empty],
+        [Empty, Empty, Empty]
+    ]
+end CreateBoard
+
+procedure PrintBoard(Board : Array<Array<Character>>) is
+begin
+    output("-------")
+
+    for y in 0 .. BoardSize - 1 do
+        output(Board[y][0], "|", Board[y][1], "|", Board[y][2])
+        output("-------")
+    end
+end PrintBoard
+
+function IsMovesLeft(Board : Array<Array<Character>>) -> Boolean is
+begin
+    for y in 0 .. BoardSize - 1 do
+        for x in 0 .. BoardSize - 1 do
+            if Board[y][x] == Empty then
+                return true
+            end
+        end
+    end
+
+    return false
+end IsMovesLeft
+
+function Evaluate(Board : Array<Array<Character>>) -> Integer is
+begin
+    for row in 0 .. 2 do
+        if Board[row][0] == Board[row][1] and Board[row][1] == Board[row][2] then
+            if Board[row][0] == AI then
+                return 10
+            end
+
+            if Board[row][0] == Player then
+                return -10
+            end
+        end
+    end
+
+    for i in 0 .. 2 do
+        if Board[0][i] == Board[1][i] and Board[1][i] == Board[2][i] then
+            if Board[0][i] == AI then
+                return 10
+            end
+
+            if Board[0][i] == Player then
+                return -10
+            end
+        end
+    end
+
+    if Board[0][0] == Board[1][1] and Board[1][1] == Board[2][2] then
+        if Board[0][0] == AI then
+            return 10
+        end
+
+        if Board[0][0] == Player then
+            return -10
+        end
+    end
+
+    if Board[0][2] == Board[1][1] and Board[1][1] == Board[2][0] then
+        if Board[0][2] == AI then
+            return 10
+        end
+
+        if Board[0][2] == Player then
+            return -10
+        end
+    end
+
+    return 0
+end Evaluate
+
+function Minimax(MUTABLE Board : Array<Array<Character>>, Depth : Integer, IsMax : Boolean) -> Integer is
+begin
+    Score : Integer = Evaluate(Board)
+
+    if Score == 10 then
+        return Score
+    end
+
+    if Score == -10 then
+        return Score
+    end
+
+    if not IsMovesLeft(Board) then
+        return 0
+    end
+
+    if IsMax == true then
+        MUTABLE Best : Integer = -1000
+
+        for y in 0 .. 2 do
+            for x in 0 .. 2 do
+                if Board[y][x] == Empty then
+                    Board[y][x] := AI
+
+                    Value : Integer = Minimax(Board, Depth + 1, false)
+
+                    if Value > Best then
+                        Best := Value
+                    end
+
+                    Board[y][x] := Empty
+                end
+            end
+        end
+
+        return Best
+    else
+        MUTABLE Best : Integer = 1000
+
+        for y in 0 .. 2 do
+            for x in 0 .. 2 do
+                if Board[y][x] == Empty then
+                    Board[y][x] := Player
+
+                    Value : Integer = Minimax(Board, Depth + 1, true)
+
+                    if Value < Best then
+                        Best := Value
+                    end
+
+                    Board[y][x] := Empty
+                end
+            end
+        end
+
+        return Best
+    end
+end Minimax
+
+procedure FindBestMove(MUTABLE Board : Array<Array<Character>>, MUTABLE BestRow : Integer, MUTABLE BestColumn : Integer) is
+begin
+    MUTABLE BestValue : Integer = -1000
+
+    for y in 0 .. 2 do
+        for x in 0 .. 2 do
+            if Board[y][x] == Empty then
+                Board[y][x] := AI
+
+                MoveValue : Integer = Minimax(Board, 0, false)
+
+                Board[y][x] := Empty
+
+                if MoveValue > BestValue then
+                    BestRow := y
+                    BestColumn := x
+                    BestValue := MoveValue
+                end
+            end
+        end
+    end
+end FindBestMove
+
+method Main is
+begin
+    MUTABLE Board : Array<Array<Character>> = CreateBoard()
+
+    MUTABLE GameOver : Boolean = false
+
+    repeat
+        PrintBoard(Board)
+
+        Row : Integer = input("Row (0-2): ")
+        Column : Integer = input("Column (0-2): ")
+
+        if Board[Row][Column] == Empty then
+            Board[Row][Column] := Player
+        else
+            output("Invalid move.")
+        end
+
+        MUTABLE Score : Integer = Evaluate(Board)
+
+        if Score == -10 then
+            PrintBoard(Board)
+            output("Player wins.")
+            GameOver := true
+        end
+
+        if not GameOver and IsMovesLeft(Board) then
+            MUTABLE BestRow : Integer = 0
+            MUTABLE BestColumn : Integer = 0
+
+            FindBestMove(Board, BestRow, BestColumn)
+
+            Board[BestRow][BestColumn] := AI
+        end
+
+        Score := Evaluate(Board)
+
+        if Score == 10 then
+            PrintBoard(Board)
+
+            output("AI wins.")
+
+            GameOver := true
+        end
+
+        if not IsMovesLeft(Board) then
+            PrintBoard(Board)
+            output("Draw.")
+            GameOver := true
+        end
+
+    until GameOver == true
+end Main
