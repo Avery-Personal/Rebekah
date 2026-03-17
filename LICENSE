@@ -1,21 +1,64 @@
-MIT License
-
-Copyright (c) 2026 Averi
+ALPU Software License v1.2  
+(Asuka License for Protective Use)  
+Copyright 2026 © AveriC  
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+of this software and associated documentation files (the "Software"), to use,
+copy, and redistribute the Software for any personal or commercial purpose,
+subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. Modification Restrictions
+   - You may not modify the Software in any way without obtaining explicit
+     written permission from the copyright holder.
+   - Redistribution of the Software is allowed only in its original,
+     unmodified form, except when such modification has been explicitly
+     authorized in writing by the copyright holder.
+   - You may not sublicense or authorize others to modify the Software without
+     explicit written permission.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Derivative Works
+   - Any derivative works or modifications created with explicit permission
+     must be licensed under ALPU v1.2.
+   - Derivative works may not be relicensed under a closed-source license
+     unless the Licensee has documented written authorization from the
+     copyright holder granting permission to do so.
+   - Any attempt to bypass these restrictions voids all rights granted herein.
+
+3. Attribution
+   - Attribution to the original author is recommended but not required.
+   - If redistribution includes notice or documentation, including a
+     reference to the Licensor is encouraged.
+
+4. Patent Grant (Optional)
+   - The Licensor grants the Licensee a non-exclusive, worldwide, royalty-free
+     license under any patents held by the Licensor that are necessarily
+     infringed by the Software as provided. This grant terminates if the Licensee
+     initiates patent litigation claiming the Software infringes a patent.
+
+5. Disclaimer of Warranty
+   - The Software is provided "as is", without warranty of any kind, express
+     or implied, including but not limited to warranties of
+     merchantability, fitness for a particular purpose, and non-infringement.
+
+6. Limitation of Liability
+   - In no event shall the Licensor be liable for any claim, damages, or other
+     liability, whether in an action of contract, tort, or otherwise, arising
+     from, out of, or in connection with the Software or the use or other
+     dealings in the Software.
+
+7. Enforcement and Termination
+   - Any breach of this license, including unauthorized modification,
+     redistribution, sublicensing, or relicensing, constitutes immediate
+     revocation of the rights granted herein.
+   - Termination does not affect any rights granted prior to the breach.
+
+8. Severability
+   - If any provision of this License is held invalid or unenforceable under
+     applicable law, such provision shall be enforced to the maximum extent
+     permissible, and all remaining provisions shall remain in full force and
+     effect.
+
+9. Governing Law
+   - This License shall be governed by and construed in accordance with the
+     laws of California, United States, without regard to its conflict of law
+     provisions.
